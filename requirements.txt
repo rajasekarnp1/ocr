@@ -1,0 +1,31 @@
+# Core
+numpy>=1.23,<2.0
+Pillow>=9.0,<11.0
+PyYAML>=6.0,<7.0
+python-dotenv>=0.20,<1.1
+
+# Image/PDF Processing
+opencv-contrib-python-headless>=4.7,<5.0 # Replaced opencv-python-headless for ximgproc
+PyMuPDF>=1.23,<1.25
+scikit-image>=0.19,<0.23
+
+# ML Frameworks & Models (commented out until specific models are integrated)
+# torch>=2.0,<2.3
+# torchvision>=0.15,<0.18
+# torchaudio>=2.0,<2.3
+# tensorflow>=2.10,<2.16 # Or tensorflow-cpu
+paddlepaddle>=2.5,<2.7 # For CPU by default. GPU users can install paddlepaddle-gpu
+paddleocr>=2.7,<2.8   # PP-OCRv4 series. Check latest patch for <2.8
+
+# Transformers (Hugging Face)
+transformers>=4.30,<4.41
+sentencepiece>=0.1.98,<0.2.1
+# accelerate>=0.20,<0.29
+
+# Evaluation (might move to dev later if only for testing scripts)
+jiwer>=3.0,<3.1
+python-Levenshtein>=0.20,<0.26
+# ocreval # placeholder, need to find suitable package or implement
+
+# For D-Wave Ocean SDK (Quantum-Inspired Post-Processing - Future)
+# dwave-ocean-sdk>=6.0,<7.0

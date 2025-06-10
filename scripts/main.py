@@ -17,14 +17,14 @@ from typing import Dict, Any
 # This assumes main.py is in the project root.
 # If it's in a 'src' or 'app' subdirectory, this might need adjustment
 # or preferably, the project is structured as an installable package.
-project_root = Path(__file__).resolve().parent
+project_root = Path(__file__).resolve().parent.parent # Go up one level from scripts/ to project root
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 # --- End Path Setup ---
 
 try:
-    from ocr_workflow_orchestrator import OCRWorkflowOrchestrator
-    from config_loader import load_config, DEFAULT_LOGGING_CONFIG # load_config also handles logging setup
+    from ocrx.ocr_workflow_orchestrator import OCRWorkflowOrchestrator
+    from ocrx.core.config_loader import load_config, DEFAULT_LOGGING_CONFIG # load_config also handles logging setup
     from PIL import Image # Pillow must be installed
 except ImportError as e:
     print(f"Error: Missing critical dependencies. Please ensure all required packages are installed. Details: {e}")
@@ -57,7 +57,7 @@ def create_dummy_config_file(config_path: Path) -> None:
         "ocr_engines": {
             "dummy_local_engine": {
                 "enabled": True,
-                "module": "stubs.dummy_engine",  # Path for importlib
+                "module": "tests.stubs.dummy_engine",  # Path for importlib
                 "class": "DummyLocalEngine",
                 "name": "My Main Test Dummy Engine", # Custom name for the engine instance
                 "config": { # Engine-specific configuration map
@@ -67,7 +67,7 @@ def create_dummy_config_file(config_path: Path) -> None:
             },
             "another_engine_example": {
                 "enabled": False, # This engine won't be loaded
-                "module": "stubs.dummy_engine",
+                "module": "tests.stubs.dummy_engine",
                 "class": "DummyLocalEngine",
                 "name": "My Disabled Dummy",
                 "config": {"model_path": "models/another.onnx"}
@@ -86,7 +86,7 @@ def create_dummy_config_file(config_path: Path) -> None:
         dummy_config_content["logging"]["loggers"]["OCREngineManager"] = {
              "handlers": ["console"], "level": "INFO", "propagate": False
         }
-        dummy_config_content["logging"]["loggers"]["stubs.dummy_engine"] = { # Configure stub logger
+        dummy_config_content["logging"]["loggers"]["tests.stubs.dummy_engine"] = { # Configure stub logger
              "handlers": ["console"], "level": "INFO", "propagate": False
         }
 
@@ -221,51 +221,3 @@ if __name__ == '__main__':
     main_logger_bootstrap.info("Starting OCR-X main application...")
     main()
     main_logger_bootstrap.info("OCR-X main application finished.")
-
-```
-The `main.py` file has been created with the specified structure and functionality.
-
-**Key features implemented:**
-
-1.  **Path Setup:**
-    *   The project root is determined using `Path(__file__).resolve().parent`.
-    *   This project root is added to `sys.path` to ensure that modules like `ocr_workflow_orchestrator`, `config_loader`, `ocr_engine_interface`, and the `stubs` directory are correctly importable when `main.py` is run directly from the project root.
-
-2.  **Imports:**
-    *   Imports `OCRWorkflowOrchestrator`, `load_config`, `DEFAULT_LOGGING_CONFIG`, `logging`, `os`, `sys`, `yaml`, `pathlib.Path`, `typing.Dict`, `typing.Any`, and `PIL.Image`.
-    *   Includes a try-except block for initial imports to provide a user-friendly message if critical dependencies like PyYAML or Pillow are missing.
-
-3.  **Global Variables:**
-    *   `CONFIG_FILE_NAME` ("temp\_main\_config.yaml") and `DUMMY_IMAGE_NAME` ("temp\_dummy\_image.png") are defined for clarity.
-    *   A global `logger` variable is declared, to be initialized within `main()`.
-
-4.  **`create_dummy_config_file(config_path: Path)` Function:**
-    *   Creates a YAML configuration file (`temp_main_config.yaml`) programmatically.
-    *   The configuration includes:
-        *   `app_settings` with a `default_ocr_engine` set to "dummy\_local\_engine".
-        *   `ocr_engines` section defining `dummy_local_engine` (enabled, pointing to `stubs.dummy_engine.DummyLocalEngine`, with a custom name and specific config parameters) and a disabled engine example.
-        *   A `logging` section initialized from `DEFAULT_LOGGING_CONFIG` and then customized to set INFO level for key application loggers (`MainApp`, `OCRWorkflowOrchestrator`, `OCREngineManager`, `stubs.dummy_engine`) for the demonstration.
-
-5.  **`create_dummy_image_file(image_path: Path)` Function:**
-    *   Uses `PIL.Image` to create a simple, small sky-blue PNG image (`temp_dummy_image.png`).
-    *   Includes basic error handling in case Pillow fails to create the image.
-
-6.  **`main()` Function:**
-    *   **Logging Setup:** Initializes a global `logger` named "MainApp" using `DEFAULT_LOGGING_CONFIG` *before* creating dummy files, ensuring that the creation process itself is logged. The `OCRWorkflowOrchestrator` will later re-apply logging based on the content of the dummy config file.
-    *   **Dummy File Creation:** Calls `create_dummy_config_file()` and `create_dummy_image_file()`.
-    *   **Orchestrator Instantiation:** Creates an instance of `OCRWorkflowOrchestrator`, passing the path to the dummy config file. The logger is re-obtained after this step.
-    *   **Log Available Engines:** Retrieves and logs the list of available engines from the `engine_manager`.
-    *   **Process Document:**
-        *   Calls `orchestrator.process_document()` first using the default engine logic (since `default_ocr_engine` is set in the dummy config).
-        *   Then, calls `orchestrator.process_document()` again, explicitly requesting the "dummy\_local\_engine".
-        *   Language hints (`"en"`, `"de"`) are passed for demonstration.
-    *   **Print Result:** Logs the text result or an error message based on the outcome.
-    *   **Cleanup:** Includes a `finally` block to ensure the dummy config and image files are deleted. It also logs a message about the potential creation of `ocrx_app_debug.log` if file logging was active.
-    *   **Error Handling:** A main `try...except...finally` block wraps the core logic to catch and log major exceptions (`FileNotFoundError`, `ImportError`, generic `Exception`).
-
-7.  **`if __name__ == '__main__':` Block:**
-    *   Sets up a very basic bootstrap logger.
-    *   Calls the `main()` function.
-    *   Logs start and finish messages.
-
-This script should now provide a runnable example demonstrating the core orchestration logic, dynamic engine loading (via the dummy engine), and configuration/logging setup. It creates its own temporary dependencies (config and image) and cleans them up.

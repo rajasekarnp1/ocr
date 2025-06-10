@@ -1,0 +1,54 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtualenv
+.venv/
+venv/
+ENV/
+
+# IDE / Editor specific
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Data and Models (if large or sensitive, otherwise specific paths)
+# data/raw_datasets/
+# models/
+*.onnx
+*.pth
+*.pb
+*.tflite
+*.paddle
+
+# Test outputs
+htmlcov/
+.coverage
+coverage.xml
+junit/
+
+# OS specific
+.DS_Store
+Thumbs.db

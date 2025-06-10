@@ -1,0 +1,86 @@
+# OCR-X MVP Configuration File for E2E Evaluation
+
+app_settings:
+  default_ocr_engine: "paddle_ocr_mvp" # This ID must match an engine defined in recognition_manager's engines_config
+  # Other global settings can be added here
+
+modules:
+  image_loader:
+    enabled: true
+    default_dpi: 200 # Slightly lower for MVP tests if speed is an issue, or 300 for quality
+
+  preprocessor:
+    enabled: true
+    osd_skew_correction:
+      enabled: true # Keep basic skew correction
+      min_skew_angle_to_correct: 0.5
+    blur:
+      enabled: false # Typically off for clean documents
+    binarization:
+      enabled: true
+      method: "otsu" # Otsu is robust and doesn't need contrib packages for MVP
+
+  layout_analyzer:
+    enabled: true
+    min_contour_area: 500       # Filter very small noise contours
+    aspect_ratio_range: [0.1, 15.0] # Allow wider range for various text blocks
+    threshold_method: "otsu"    # Use Otsu if preprocessor already binarized, or adaptive_gaussian on gray
+    adaptive_block_size: 51     # Larger block for potentially varied text sizes
+    adaptive_c_value: 7
+    morph_kernel_size: [15, 3]  # Rectangular kernel to close horizontal gaps (lines)
+    morph_op: "close"
+
+  recognition_manager:
+    enabled: true
+    default_engine_id: "paddle_ocr_mvp" # This is the primary engine for MVP
+    engines_config:
+      "paddle_ocr_mvp": # This ID is referenced by default_ocr_engine above
+        enabled: true
+        class_path: "ocrx.modules.engines.paddleocr_engine.PaddleOCREngineWrapper"
+        params:
+          lang: "en" # For English MVP dataset
+          use_angle_cls: true
+          show_log: false # Reduce PaddleOCR's own console noise
+          ocr_version: "MVP_PP-OCRv4" # Informational
+          # det_model_dir: "/path/to/your/det_model" # Optional: if using custom models
+          # rec_model_dir: "/path/to/your/rec_model"
+          # cls_model_dir: "/path/to/your/cls_model"
+          # use_gpu: false # Set to true if GPU is available and paddlepaddle-gpu is installed
+
+  postprocessor:
+    enabled: true
+    dictionary_path: null # No dictionary for base MVP, can be added later
+    s2s_model_enabled: false
+
+  output_generator:
+    enabled: true
+    output_dir: "output_mvp_evaluation" # Will be overridden by script usually
+    formats: ["txt"] # For MVP evaluation, plain text is primary
+
+# Logging Configuration (can be more detailed if needed)
+logging:
+  version: 1
+  disable_existing_loggers: false
+  formatters:
+    standard:
+      format: '%(asctime)s - %(name)s - %(levelname)s - %(module)s.%(funcName)s:%(lineno)d - %(message)s'
+  handlers:
+    console:
+      class: logging.StreamHandler
+      formatter: standard
+      level: INFO # Set to DEBUG for more verbose output during testing
+  root:
+    handlers: [console]
+    level: WARNING
+  loggers:
+    ocrx: # Base logger for the ocrx library
+      handlers: [console]
+      level: INFO # Set to DEBUG for development
+      propagate: false
+    # Example: Set specific module loggers to DEBUG if needed
+    # "ocrx.module.layout_analyzer":
+    #   level: DEBUG
+    # "ocrx.module.recognition_engine_manager":
+    #   level: DEBUG
+    # "ocrx.module.engines.paddleocr_engine":
+    #   level: DEBUG

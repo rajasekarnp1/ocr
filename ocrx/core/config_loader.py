@@ -10,24 +10,25 @@ import json
 import logging
 import logging.config # For dictConfig
 import os
-from typing import Dict, Any # Using Dict and Any from typing for Python 3.8 compatibility
+from typing import Dict, Any, Optional # Using Dict and Any from typing for Python 3.8 compatibility
+# from .exceptions import OCRXConfigurationError # Not used in get_module_config directly, but good for module context
 
 # Default logging configuration if config file is missing or logging section is absent/invalid
 DEFAULT_LOGGING_CONFIG: Dict[str, Any] = {
     'version': 1,
     'disable_existing_loggers': False,
     'formatters': {
-        'default': {
-            'format': '%(asctime)s - %(name)s - %(levelname)s - %(module)s:%(lineno)d - %(message)s'
+        'standard': {
+            'format': '%(asctime)s - %(name)s - %(levelname)s - %(module)s.%(funcName)s:%(lineno)d - %(message)s'
         },
-        'simple': {
+        'simple': { # Simple can remain for less verbose needs if any
             'format': '%(levelname)s - %(name)s: %(message)s'
         }
     },
     'handlers': {
         'console': {
             'class': 'logging.StreamHandler',
-            'formatter': 'default', # More detailed default for console
+            'formatter': 'standard', # Use the new standard formatter
             'level': 'INFO',
             'stream': 'ext://sys.stdout'
         }
@@ -64,6 +65,34 @@ DEFAULT_LOGGING_CONFIG: Dict[str, Any] = {
 module_logger = logging.getLogger(__name__)
 # To make this logger specifically configurable in the YAML, we can name it, e.g., 'ConfigLoader'
 # module_logger = logging.getLogger('ConfigLoader') # This will be used later if defined in YAML
+
+def get_module_config(main_config: Dict[str, Any], module_key: str, default_if_missing: Optional[Dict] = None) -> Dict[str, Any]:
+    """
+    Safely extracts a sub-dictionary for a module's configuration.
+
+    Args:
+        main_config: The main application configuration dictionary.
+        module_key: The key for the desired module's configuration
+                    (e.g., "preprocessing_settings", "recognition_engine_A").
+        default_if_missing: A default dictionary to return if the key is not found.
+                            If None (default), an empty dict is returned.
+
+    Returns:
+        The module's configuration dictionary or the default.
+    """
+    if default_if_missing is None:
+        default_if_missing = {}
+
+    # Assuming module configurations are nested under a top-level "modules" key
+    module_config = main_config.get("modules", {}).get(module_key, default_if_missing)
+    if not isinstance(module_config, dict):
+        # Use the module_logger defined at the top of the file for consistency
+        module_logger.warning(
+            f"Configuration for module key '{module_key}' is not a dictionary. "
+            f"Using default: {default_if_missing}"
+        )
+        return default_if_missing
+    return module_config
 
 def load_config(config_path: str = "config.yaml") -> Dict[str, Any]:
     """

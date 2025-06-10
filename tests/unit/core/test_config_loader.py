@@ -14,14 +14,8 @@ from typing import Dict, Any
 # For a typical project structure, you might need:
 # import sys
 # sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-try:
-    from config_loader import load_config, DEFAULT_LOGGING_CONFIG
-except ImportError:
-    # Fallback for environments where the path might not be set up for direct import
-    # This is common in some CI/testing setups if the project isn't installed as a package
-    import sys
-    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-    from config_loader import load_config, DEFAULT_LOGGING_CONFIG
+from ocrx.core.config_loader import load_config, DEFAULT_LOGGING_CONFIG, get_module_config
+from typing import Optional # Added for the helper function typing
 
 
 # --- Helper function to create dummy config content ---
@@ -34,7 +28,7 @@ def create_dummy_config_content(include_logging: bool = True, custom_logging_lev
         },
         "ocr_engines": {
             "dummy_local_test_engine": {
-                "module": "stubs.test_dummy_engine",
+                "module": "tests.stubs.test_dummy_engine",
                 "class": "TestDummyEngine",
                 "enabled": True,
                 "config": {"model_path": "models/dummy_test.onnx"}
@@ -154,6 +148,86 @@ def test_load_invalid_yaml_config(tmp_path, caplog):
         for record in caplog.records
         if record.levelname == "ERROR"
     )
+
+# --- Tests for get_module_config ---
+
+@pytest.fixture
+def sample_main_config() -> Dict[str, Any]:
+    """Provides a sample main configuration dictionary for testing get_module_config."""
+    return {
+        "app_settings": {"global_setting": "app_wide_value"},
+        "modules": {
+            "module_A": {
+                "param1": "valueA1",
+                "param2": 100
+            },
+            "module_B": {
+                "param1": "valueB1",
+                "enabled": False
+            },
+            "module_C_is_not_dict": "not_a_dictionary"
+        },
+        "logging": {
+            "version": 1
+            # ... other logging config ...
+        }
+    }
+
+def test_get_module_config_success(sample_main_config):
+    """Test successfully extracting a module's configuration."""
+    module_a_config = get_module_config(sample_main_config, "module_A")
+    assert module_a_config == {"param1": "valueA1", "param2": 100}
+
+    module_b_config = get_module_config(sample_main_config, "module_B")
+    assert module_b_config == {"param1": "valueB1", "enabled": False}
+
+def test_get_module_config_key_not_found_no_default(sample_main_config):
+    """Test getting config for a non-existent module key with no default provided."""
+    # Logger is not passed to get_module_config, it uses logging.getLogger(__name__)
+    # which is ocrx.core.config_loader. So we don't need caplog here unless we want to check its output.
+    non_existent_config = get_module_config(sample_main_config, "module_X")
+    assert non_existent_config == {} # Should return empty dict by default
+
+def test_get_module_config_key_not_found_with_default(sample_main_config):
+    """Test getting config for a non-existent module key with a custom default."""
+    default_settings = {"default_param": True, "another": 123}
+    non_existent_config = get_module_config(sample_main_config, "module_Y", default_if_missing=default_settings)
+    assert non_existent_config == default_settings
+
+def test_get_module_config_modules_key_missing(sample_main_config):
+    """Test when the top-level 'modules' key is missing from main_config."""
+    config_without_modules = {"app_settings": {"setting": "val"}}
+
+    module_config = get_module_config(config_without_modules, "module_A")
+    assert module_config == {} # Default empty dict
+
+    default_settings = {"info": "using default"}
+    module_config_with_default = get_module_config(config_without_modules, "module_A", default_if_missing=default_settings)
+    assert module_config_with_default == default_settings
+
+def test_get_module_config_is_not_dict_warning(sample_main_config, caplog):
+    """Test that a warning is logged if the retrieved module config is not a dictionary."""
+    default_settings = {"using_default": True}
+    with caplog.at_level(logging.WARNING):
+        module_c_config = get_module_config(sample_main_config, "module_C_is_not_dict", default_if_missing=default_settings)
+
+    assert module_c_config == default_settings # Should return the default
+    assert any(
+        "Configuration for module key 'module_C_is_not_dict' is not a dictionary." in record.message and
+        "Using default: {'using_default': True}" in record.message
+        for record in caplog.records
+        if record.levelname == "WARNING" and record.name == "ocrx.core.config_loader" # Check logger name
+    )
+
+def test_get_module_config_empty_main_config():
+    """Test with an entirely empty main configuration."""
+    empty_config = {}
+    module_config = get_module_config(empty_config, "any_module")
+    assert module_config == {}
+
+    default_val = {"is_default": True}
+    module_config_def = get_module_config(empty_config, "any_module", default_if_missing=default_val)
+    assert module_config_def == default_val
     assert any(
         "Falling back to default logging configuration due to parsing error." in record.message
         for record in caplog.records
@@ -253,49 +327,3 @@ def test_load_unsupported_file_format(tmp_path, caplog):
         for record in caplog.records
         if record.levelname == "ERROR"
     )
-
-```
-The `tests/test_config_loader.py` file has been created with the specified pytest test cases.
-
-**Summary of the Test File Content:**
-
-1.  **Imports:** Includes `pytest`, `yaml`, `json`, `os`, `logging`, `typing`, and `config_loader` (with a fallback sys.path modification for environments where it might not be directly importable).
-2.  **`create_dummy_config_content` Helper Function:**
-    *   Creates a dictionary for dummy configuration content, optionally including a `logging` section.
-    *   The logging section can have a custom level for a specific logger (`TestAppLogger`) for targeted assertions.
-3.  **Test Cases:**
-    *   **`test_load_valid_yaml_config(tmp_path)`:**
-        *   Creates a valid `config.yaml` using `tmp_path`.
-        *   Calls `load_config` and asserts that app settings are loaded correctly.
-        *   Asserts that the logging system is configured by checking a specific logger's level (`TestAppLogger`) and handler type.
-    *   **`test_load_valid_json_config(tmp_path)`:**
-        *   Similar to the YAML test, but creates and loads a `config.json`.
-        *   Asserts correct loading of app settings and basic logging configuration.
-    *   **`test_load_non_existent_config(caplog)`:**
-        *   Calls `load_config` with a path to a non-existent file.
-        *   Asserts that the returned config is minimal and contains default logging.
-        *   Uses `caplog` to verify that a "Config file ... not found" warning was logged.
-        *   Checks that the `ConfigLoader` logger (from `DEFAULT_LOGGING_CONFIG`) has the expected default level.
-    *   **`test_load_invalid_yaml_config(tmp_path, caplog)`:**
-        *   Creates a `invalid_config.yaml` with malformed YAML.
-        *   Asserts that the returned config is minimal and contains default logging.
-        *   Uses `caplog` to verify error messages about parsing failure and fallback to default logging.
-    *   **`test_load_empty_config_file(tmp_path, caplog)`:**
-        *   Creates an empty `empty_config.yaml`.
-        *   Asserts minimal config with default logging is returned.
-        *   Uses `caplog` to verify warnings about the empty file.
-    *   **`test_load_config_precedence_logging_config_missing(tmp_path, caplog)`:**
-        *   Creates `config_no_logging.yaml` with app settings but no `logging` section.
-        *   Asserts app settings are loaded.
-        *   Asserts (by checking a specific logger's level) that `DEFAULT_LOGGING_CONFIG` was applied.
-        *   Uses `caplog` to verify an INFO message about applying default logging due to missing section.
-    *   **`test_load_config_applies_custom_logging(tmp_path)`:**
-        *   Creates `custom_log_config.yaml` with a very specific logging configuration (CRITICAL level for `TestAppLogger` and a unique handler).
-        *   Calls `load_config`.
-        *   Verifies that the custom logger level and handler were applied to `TestAppLogger`.
-    *   **`test_load_unsupported_file_format(tmp_path, caplog)`:**
-        *   Creates a `config.txt` with an unsupported extension.
-        *   Asserts minimal config with default logging is returned.
-        *   Uses `caplog` to verify an error message about the unsupported format.
-
-The tests cover various scenarios including valid YAML/JSON, missing files, invalid content, empty files, and the correct application of default vs. custom logging configurations. The use of `tmp_path` ensures tests are isolated and do not leave behind artifacts. `caplog` is used to verify logging behavior.

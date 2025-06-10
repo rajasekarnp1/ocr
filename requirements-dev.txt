@@ -1,0 +1,11 @@
+pytest>=7.0,<8.2
+pytest-cov>=4.0,<5.1
+flake8>=6.0,<7.1
+black>=23.0,<24.5
+pre-commit>=3.0,<3.8
+mypy>=1.0,<1.10 # For type checking
+# sphinx>=7.0,<7.4 # For documentation generation
+# sphinx-rtd-theme # For documentation theme
+# myst-parser # For Markdown in Sphinx
+# sphinx-autodoc-typehints # For better type hints in docs
+# pydantic>=2.0,<2.8 # For data objects

@@ -1,7 +1,7 @@
 # stubs/dummy_engine.py
 import logging
 from typing import Any, Dict, List, Optional # Ensure all necessary typing imports
-from ocr_engine_interface import OCREngine # Adjust path if needed during actual execution
+from ocrx.core.ocr_engine_interface import OCREngine # Adjust path if needed during actual execution
 
 class DummyLocalEngine(OCREngine):
     """
