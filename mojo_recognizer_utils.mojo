@@ -43,11 +43,11 @@ fn main():
     test_list.append(1)
     test_list.append(2)
     test_list.append(3)
-    
+
     print("[Mojo] Test input list created:", test_list)
-    
+
     let result_obj = example_mojo_tensor_operation(test_list.to_object())
-    
+
     # Try to convert result back to a list to inspect
     let result_list = Python.List[IntLiteral](result_obj)
     print("[Mojo] Test output list from function:", result_list)

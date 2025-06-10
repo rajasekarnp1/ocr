@@ -4,7 +4,32 @@ import yaml
 import json
 import logging
 import shutil
+import unittest # Ensure unittest is imported
+
+# Assuming custom_exceptions.py is in the same directory or PYTHONPATH
+try:
+    from custom_exceptions import OCRConfigurationError, OCRFileNotFoundError
+except ImportError:
+    import sys
+    sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+    from custom_exceptions import OCRConfigurationError, OCRFileNotFoundError
+    # Fallback if custom_exceptions is not found (e.g. during isolated testing)
+    if "OCRConfigurationError" not in globals(): # Check if already defined by try block
+        class OCRConfigurationError(RuntimeError): pass
+        class OCRFileNotFoundError(FileNotFoundError): pass
+
+
 from config_loader import load_config, DEFAULT_LOGGING_CONFIG, create_default_config_if_not_exists
+
+# Configure logging for tests (basic if not already configured by a test runner)
+logger = logging.getLogger(__name__)
+if not logger.handlers:
+    handler = logging.StreamHandler()
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+logger.setLevel(logging.INFO) # Set to DEBUG for more verbose test logging
+
 
 class TestConfigLoader(unittest.TestCase):
 
@@ -17,7 +42,7 @@ class TestConfigLoader(unittest.TestCase):
         logging.shutdown()
         for handler in logging.root.handlers[:]:
             logging.root.removeHandler(handler)
-        
+
         # Ensure that the default config_dev.yaml, if created by a previous test run's module, is removed
         if os.path.exists("config_dev.yaml"):
             os.remove("config_dev.yaml")
@@ -58,21 +83,26 @@ class TestConfigLoader(unittest.TestCase):
         self.assertEqual(logging.getLogger().getEffectiveLevel(), logging.ERROR)
 
     def test_load_config_file_not_found(self):
-        non_existent_path = os.path.join(self.test_dir, "non_existent_config.yaml")
-        config = load_config(non_existent_path)
-        
-        # Should return minimal default config
-        self.assertTrue(config["app_settings"]["default_setting"])
-        # And apply default logging
-        # Check if default logging was applied (root level is DEBUG in DEFAULT_LOGGING_CONFIG)
-        # Note: logging.config.dictConfig sets the level for the root logger.
-        self.assertEqual(logging.getLogger().getEffectiveLevel(), logging.DEBUG) 
+        non_existent_path = os.path.join(self.test_dir, "non_existent_config_for_test.yaml")
+        # load_config (non-config_dev.yaml) should raise OCRFileNotFoundError if file doesn't exist.
+        logger.info(f"TestConfigLoader: Testing load_config with non-existent path: {non_existent_path}")
+        with self.assertRaises(OCRFileNotFoundError) as context:
+            load_config(non_existent_path)
+        self.assertTrue(f"Configuration file '{non_existent_path}' not found" in str(context.exception))
+        # Default logging should be applied by load_config before raising the error
+        # if the error occurs after the initial os.path.exists check.
+        # The refined load_config applies default logging then raises.
+        self.assertEqual(logging.getLogger().getEffectiveLevel(), DEFAULT_LOGGING_CONFIG['root']['level'])
+
 
     def test_load_config_empty_file(self):
-        empty_yaml_path = os.path.join(self.test_dir, "empty_config.yaml")
+        # Test behavior when a config file (not config_dev.yaml) is empty.
+        # load_config should parse it as empty, log a warning, and return a default-like structure.
+        logger.info("TestConfigLoader: test_load_config_empty_file")
+        empty_yaml_path = os.path.join(self.test_dir, "actually_empty_config.yaml")
         with open(empty_yaml_path, 'w') as f:
             pass # Create an empty file
-        
+
         config = load_config(empty_yaml_path)
         self.assertTrue(config["app_settings"]["default_setting"])
         self.assertEqual(logging.getLogger().getEffectiveLevel(), logging.DEBUG)
@@ -80,15 +110,17 @@ class TestConfigLoader(unittest.TestCase):
     def test_load_config_invalid_yaml_file(self):
         invalid_yaml_path = os.path.join(self.test_dir, "invalid_config.yaml")
         with open(invalid_yaml_path, 'w') as f:
-            f.write("app_settings: version: 1.0\nlogging: level: DEBUG") # Invalid YAML format
+            f.write("app_settings: version: 1.0\nlogging:\n  handlers:\n    console:\n      level: INVALID_LEVEL_VALUE_TYPE") # Invalid level value type
 
-        with self.assertRaises(ValueError): # Expecting a ValueError for parse failure
+        logger.info(f"TestConfigLoader: Testing load_config with invalid (malformed) YAML: {invalid_yaml_path}")
+        with self.assertRaises(OCRConfigurationError) as context:
             load_config(invalid_yaml_path)
-        
-        # Check that default logging is applied after a parse error
-        self.assertEqual(logging.getLogger().getEffectiveLevel(), logging.DEBUG)
+        self.assertTrue("Failed to parse configuration file" in str(context.exception) or "Error parsing configuration file" in str(context.exception))
 
-    def test_logging_configured(self):
+        # Check that default logging is applied after a parse error by load_config's exception handling
+        self.assertEqual(logging.getLogger().getEffectiveLevel(), DEFAULT_LOGGING_CONFIG['root']['level'])
+
+    def test_logging_configured_from_valid_file(self):
         dummy_yaml_path = os.path.join(self.test_dir, "logging_test_config.yaml")
         dummy_config_data = {
             "logging": {
@@ -113,7 +145,7 @@ class TestConfigLoader(unittest.TestCase):
             yaml.dump(dummy_config_data, f)
 
         load_config(dummy_yaml_path)
-        
+
         # Check root logger
         self.assertEqual(logging.getLogger().getEffectiveLevel(), logging.DEBUG)
         # Check specific logger
@@ -132,14 +164,14 @@ class TestConfigLoader(unittest.TestCase):
             os.remove(config_dev_path) # Ensure it doesn't exist
 
         self.assertFalse(os.path.exists(config_dev_path))
-        
+
         # load_config should call create_default_config_if_not_exists internally
-        config = load_config(config_dev_path) 
-        
+        config = load_config(config_dev_path)
+
         self.assertTrue(os.path.exists(config_dev_path))
         self.assertIn("app_settings", config)
         self.assertEqual(config["app_settings"]["version"], "0.0.1-default")
-        
+
         # Clean up the created config_dev.yaml
         if os.path.exists(config_dev_path):
             os.remove(config_dev_path)
@@ -156,7 +188,7 @@ class TestConfigLoader(unittest.TestCase):
 
         with open(default_config_path, 'r') as f:
             config_data = yaml.safe_load(f)
-        
+
         self.assertIn("app_settings", config_data)
         self.assertEqual(config_data["app_settings"]["version"], "0.0.1-default")
         self.assertIn("logging", config_data)

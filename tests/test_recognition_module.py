@@ -29,15 +29,15 @@ class TestONNXRecognizer(unittest.TestCase):
 
         with open(self.dummy_model_path, "w") as f:
             f.write("dummy onnx model data for testing recognizer")
-        
+
         self.addCleanup(self.cleanup_test_dir)
 
         if not logging.getLogger().hasHandlers():
             logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-        
+
         # Create dummy mojo_recognizer_utils.mojo if it doesn't exist, so Python.import_module doesn't fail on file not found
         # This is only for the Python side of import_module to find *a* file. Actual Mojo execution still needs SDK.
-        self.dummy_mojo_file_path = "mojo_recognizer_utils.mojo" 
+        self.dummy_mojo_file_path = "mojo_recognizer_utils.mojo"
         if not os.path.exists(self.dummy_mojo_file_path) and not mojo_available: # Only create if real one is not there due to no SDK
             logging.info(f"Creating a dummy '{self.dummy_mojo_file_path}' for Python import testing as Mojo SDK seems unavailable.")
             with open(self.dummy_mojo_file_path, "w") as f:
@@ -72,7 +72,7 @@ class TestONNXRecognizer(unittest.TestCase):
 
     def test_predict_method_placeholder_logic_no_mojo(self):
         recognizer = ONNXRecognizer(model_path=self.dummy_model_path)
-        
+
         # Temporarily "disable" Mojo for this test by ensuring Python.import_module fails
         # This tests the Python-only path of the predict method.
         original_python_import_module = None
@@ -127,7 +127,7 @@ class TestONNXRecognizer(unittest.TestCase):
 
         recognizer = ONNXRecognizer(model_path=self.dummy_model_path)
         mock_image_data = "SamplePreprocessedImageDataForMojoTest"
-        
+
         # The predict method internally calls the Mojo function.
         # We expect it to log information about the Mojo call and its results.
         # We also expect the ONNX placeholder output.
@@ -136,7 +136,7 @@ class TestONNXRecognizer(unittest.TestCase):
         expected_text_part = f"Raw OCR from {os.path.basename(self.dummy_model_path)}"
         self.assertTrue(text.startswith(expected_text_part))
         self.assertEqual(confidence, 0.92)
-        
+
         # To truly verify Mojo's effect, you'd check logs or if Mojo modified something.
         # The current Mojo function `example_mojo_tensor_operation` returns a list,
         # and the Python code logs it. We can't directly assert its output here without
@@ -158,9 +158,9 @@ class TestONNXRecognizer(unittest.TestCase):
         # Ensure the target .mojo file does NOT exist for this test
         original_mojo_file_path = "mojo_recognizer_utils.mojo" # Assuming it's in /app
         temp_renamed_path = "mojo_recognizer_utils.mojo.renamed_for_test"
-        
+
         mojo_file_actually_exists = os.path.exists(original_mojo_file_path)
-        
+
         if mojo_file_actually_exists:
             try:
                 os.rename(original_mojo_file_path, temp_renamed_path)
@@ -174,11 +174,11 @@ class TestONNXRecognizer(unittest.TestCase):
 
         recognizer = ONNXRecognizer(model_path=self.dummy_model_path)
         mock_image_data = "SampleDataForMojoFileMissingTest"
-        
+
         # Call predict. The try-except block around Python.import_module in predict should catch the error.
         # The method should still return the ONNX placeholder output.
         text, confidence = recognizer.predict(mock_image_data)
-        
+
         expected_text_part = f"Raw OCR from {os.path.basename(self.dummy_model_path)}"
         self.assertTrue(text.startswith(expected_text_part), "Predict should return ONNX output even if Mojo file import fails.")
         self.assertEqual(confidence, 0.92)
@@ -201,10 +201,10 @@ if __name__ == '__main__':
     # This often means the parent directory ('/app') should be in PYTHONPATH.
     # For `python -m unittest discover tests` from /app, this is handled.
     # If running `python tests/test_recognition_module.py` directly, ensure PYTHONPATH is set.
-    
+
     # Add /app to sys.path to ensure modules can be found if run directly
     import sys
     if os.path.dirname(os.path.abspath(__file__)) not in sys.path:
          sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-    
+
     unittest.main()

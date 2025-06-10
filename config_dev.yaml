@@ -1,0 +1,27 @@
+app_settings:
+  version: 0.0.1-default
+  default_output_format: txt
+  model_paths:
+    geometric_corrector: models/dummy_geometric_model.onnx
+    svtr_recognizer: models/dummy_recognition_model.onnx
+    paddle_ocr_det: models/paddle_det_v4.onnx
+    paddle_ocr_rec: models/paddle_rec_v4_en.onnx
+    byt5_corrector: models/byt5_ocr_corrector.onnx
+  performance:
+    use_directml: true
+    onnx_intra_op_threads: 0
+logging:
+  version: 1
+  disable_existing_loggers: false
+  formatters:
+    standard:
+      format: '%(asctime)s - %(name)s:%(lineno)d - %(levelname)s - %(message)s'
+  handlers:
+    console:
+      class: logging.StreamHandler
+      formatter: standard
+      level: INFO
+  root:
+    handlers:
+    - console
+    level: DEBUG
