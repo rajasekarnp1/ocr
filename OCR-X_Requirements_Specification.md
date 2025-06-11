@@ -8,7 +8,7 @@ This document outlines the SMART (Specific, Measurable, Achievable, Relevant, Ti
 
 *   **Specific:** The system shall achieve a Character Error Rate (CER) below 0.5% and Word Error Rate (WER) below 1.0% on standard machine-printed text benchmarks (e.g., ICDAR 2019, a curated internal test set of diverse documents). It must effectively handle common fonts (e.g., Times New Roman, Arial, Calibri, Courier, Helvetica) and sizes down to 6pt. The system must also demonstrate robustness against common document image distortions like mild blur and illumination changes.
 *   **Measurable:** CER and WER measured using standard tools like `ocreval` for character-level and `jiwer` for word-level accuracy on the defined test sets. Font, size, and distortion handling verified via specific, challenging test cases included in the internal test set.
-*   **Achievable:** Based on leveraging and potentially ensembling State-of-the-Art (SOTA) models (e.g., inspired by PP-OCRv4, SVTR, LayoutLMv3, TrOCR, or newer transformer-based architectures) and implementing advanced pre/post-processing techniques. The specified accuracy targets are ambitious but reflect the project's goal to be competitive.
+*   **Achievable:** Based on leveraging and potentially ensembling local State-of-the-Art (SOTA) open-source models (e.g., inspired by PP-OCRv4, SVTR, or newer transformer-based architectures), **and/or utilizing leading commercial cloud OCR APIs (such as Google Document AI or Azure AI Vision)**, complemented by advanced pre/post-processing techniques. The specified accuracy targets are ambitious but reflect the project's goal to be competitive and are well within the capabilities of these approaches.
 *   **Relevant:** Addresses the primary user need for highly accurate and reliable text extraction from machine-printed documents, as highlighted in all user personas and the feature gap analysis.
 *   **Time-bound:**
     *   **MVP Target:** CER < 1.0%, WER < 2.0% on primary benchmarks for English.
@@ -52,9 +52,9 @@ This document outlines the SMART (Specific, Measurable, Achievable, Relevant, Ti
 
 ### FR5: Windows Native Application & Performance
 
-*   **Specific:** OCR-X shall be available as a native Windows application (targeting Windows 10 and 11) with an intuitive, user-friendly graphical interface for common OCR tasks (image/PDF input, text output, basic configuration). It must leverage DirectML for GPU acceleration on compatible hardware to enhance processing speed.
+*   **Specific:** OCR-X shall be available as a native Windows application (targeting Windows 10 and 11) with an intuitive, user-friendly graphical interface for common OCR tasks (image/PDF input, text output, basic configuration). It must leverage DirectML for GPU acceleration on compatible hardware to enhance processing speed. When using on-premise engines, DirectML is critical. When using cloud-based engines, performance will be characterized by API response times and network latency.
 *   **Measurable:**
-    *   Processing speed of at least 15-25 pages per minute (PPM) on a specified mid-range Windows machine with a DirectML compatible GPU (e.g., NVIDIA GTX 1660 / AMD RX 5600) for standard A4 documents at 300 DPI. CPU-only speed target: 5-10 PPM on a modern quad-core CPU.
+    *   Processing speed for **on-premise engines** of at least 15-25 pages per minute (PPM) on a specified mid-range Windows machine with a DirectML compatible GPU (e.g., NVIDIA GTX 1660 / AMD RX 5600) for standard A4 documents at 300 DPI. CPU-only speed target: 5-10 PPM on a modern quad-core CPU. Processing speed and latency for **cloud-based engines** will also be benchmarked and documented, considering API call overheads and typical network conditions.
     *   UI responsiveness: key interactions (e.g., opening file, starting OCR, displaying results) completed within 1-2 seconds.
 *   **Achievable:** Develop UI using .NET (WPF or WinUI 3) or Python with PyQt/Tkinter ensuring good Windows integration. Integrate DirectML backends from PyTorch or TensorFlow. Performance targets are set to be competitive with existing desktop tools.
 *   **Relevant:** Directly addresses user persona needs (e.g., David Lee, Maria Garcia) and feature gap analysis for a robust, performant Windows application.
@@ -109,11 +109,11 @@ This document outlines the SMART (Specific, Measurable, Achievable, Relevant, Ti
     *   **Achievable:** Technical writers and developers collaborate.
     *   **Relevant:** Crucial for both end-users and developers (like David Lee, Dr. Chen Zhao).
     *   **Time-bound:** Draft documentation by MVP/v0.9. Finalized documentation by v1.0.
-*   **NFR4: Security (if service components are developed):**
-    *   **Specific:** If any cloud-based service components are offered (e.g., for model updates or specialized processing), API endpoints must use HTTPS. Authentication (e.g., API keys, OAuth2) must be implemented. Basic protection against OWASP Top 10 vulnerabilities. No storage of user document content beyond processing unless explicitly agreed.
+*   **NFR4: Security:**
+    *   **Specific:** **Given that the system can utilize commercial cloud OCR APIs as part of its core functionality,** API endpoints for these services must use HTTPS. Secure authentication (e.g., user-provided API keys, OAuth2 tokens managed by the application where appropriate) must be implemented for accessing cloud services. The application must provide mechanisms for secure storage and handling of these credentials (e.g., leveraging Windows Credential Manager or similar secure storage). Basic protection against OWASP Top 10 vulnerabilities relevant to a desktop client interacting with web services should be considered. No storage of user document content by OCR-X beyond local processing unless explicitly agreed by the user for specific features (e.g., caching, error reporting with consent).
     *   **Measurable:** Successful penetration test results (if applicable). Compliance with security checklist.
     *   **Achievable:** Use standard security practices and libraries.
-    *   **Relevant:** Important if any part of OCR-X becomes a service.
+    *   **Relevant:** **Crucial for protecting user credentials and data when interacting with external cloud OCR services, and for maintaining user trust.**
     *   **Time-bound:** Implemented with the first service component release.
 *   **NFR5: Language Support:**
     *   **Specific:** The initial release (v1.0) will focus on high-accuracy English. A framework for adding additional languages will be established.

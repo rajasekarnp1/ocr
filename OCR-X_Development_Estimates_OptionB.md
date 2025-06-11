@@ -1,6 +1,6 @@
-# OCR-X Project: Development Estimates (Option B - On-Premise Powerhouse)
+# OCR-X Project: Development Estimates (Option B - Flexible Hybrid Powerhouse)
 
-This document provides development estimates for the OCR-X project, focusing on Option B (On-Premise Powerhouse). Estimates are provided in Story Points and Person-Hours for an initial, functional version.
+This document provides development estimates for the OCR-X project, focusing on Option B (Flexible Hybrid Powerhouse). Estimates are provided in Story Points and Person-Hours for an initial, functional version.
 
 ## I. Core OCR Pipeline Components
 
@@ -56,11 +56,29 @@ This document provides development estimates for the OCR-X project, focusing on 
     *   **Estimated Person-Hours:** 120-180 hours
     *   **Assumptions & Notes:** This is a critical and complex task covering all DL models in the pipeline. Includes testing for performance and accuracy post-conversion. Initial version might use FP32 models, with INT8 quantization as a stretch goal or later optimization.
 
-*   **Sub-component: Ensemble/Voting Logic**
+*   **Sub-component: OCR Engine Abstraction Layer**
+    *   **Complexity Assessment:** Medium-High (Designing a flexible interface, managing different engine lifecycles and output normalizations)
+    *   **Estimated Story Points:** 8
+    *   **Estimated Person-Hours:** 60-90 hours
+    *   **Assumptions & Notes:** Core layer to enable switching between local and cloud engines. Needs to handle diverse input/output requirements of different engines.
+
+*   **Sub-component: Google Document AI Client Integration**
+    *   **Complexity Assessment:** Medium (Integrating Google Cloud client libraries, handling authentication, API request/response parsing)
+    *   **Estimated Story Points:** 10
+    *   **Estimated Person-Hours:** 70-100 hours
+    *   **Assumptions & Notes:** Covers setup, calling the relevant Document AI OCR processor, and basic error handling for API calls. Assumes familiarity with Google Cloud SDKs.
+
+*   **Sub-component: Azure AI Vision Client Integration**
+    *   **Complexity Assessment:** Medium (Similar to Google's, integrating Azure SDKs, authentication, API calls)
+    *   **Estimated Story Points:** 10
+    *   **Estimated Person-Hours:** 70-100 hours
+    *   **Assumptions & Notes:** Covers setup, calling Azure AI Vision (Read API or Document Intelligence), and error handling. Assumes familiarity with Azure SDKs.
+
+*   **Sub-component: Local Ensemble/Voting Logic**
     *   **Complexity Assessment:** Medium
     *   **Estimated Story Points:** 5
     *   **Estimated Person-Hours:** 30-50 hours
-    *   **Assumptions & Notes:** Initial implementation of simple voting/confidence-based strategies. More complex dynamic selection would be higher.
+    *   **Assumptions & Notes:** Initial implementation of simple voting/confidence-based strategies for *local* engines. More complex dynamic selection would be higher.
 
 ### 1.3. Post-Processing Module
 
@@ -88,15 +106,21 @@ This document provides development estimates for the OCR-X project, focusing on 
 
 *   **Sub-component: User Interface (UI)**
     *   **Complexity Assessment:** High (Developing a polished, intuitive, and feature-rich UI with PyQt6 for Windows 11 look and feel)
-    *   **Estimated Story Points:** 20
-    *   **Estimated Person-Hours:** 140-200 hours
-    *   **Assumptions & Notes:** Includes main window, file/clipboard input, results display, settings panels, progress indication. Responsive design.
+    *   **Estimated Story Points:** 22
+    *   **Estimated Person-Hours:** 150-220 hours
+    *   **Assumptions & Notes:** Includes main window, file/clipboard input, results display, settings panels, progress indication. Responsive design. Includes UI elements for OCR engine selection (local vs. cloud) and potentially for API key configuration.
+
+*   **Sub-component: API Key Management (Client-Side)**
+    *   **Complexity Assessment:** Medium (Securely loading/storing API keys, UI for user input if applicable)
+    *   **Estimated Story Points:** 5
+    *   **Estimated Person-Hours:** 40-60 hours
+    *   **Assumptions & Notes:** Involves mechanisms for users to provide their API keys and for the application to access them securely (e.g., config file with permissions, environment variables, or basic UI for input that saves to a secure local store like Windows Credential Manager).
 
 *   **Sub-component: OCR Workflow Orchestrator**
     *   **Complexity Assessment:** Medium
-    *   **Estimated Story Points:** 8
-    *   **Estimated Person-Hours:** 60-90 hours
-    *   **Assumptions & Notes:** Managing the sequence of calls to pipeline modules, handling data flow, managing threads for background processing to keep UI responsive.
+    *   **Estimated Story Points:** 10
+    *   **Estimated Person-Hours:** 70-100 hours
+    *   **Assumptions & Notes:** Managing the sequence of calls to pipeline modules, handling data flow, managing threads for background processing to keep UI responsive. Includes logic to interact with the OCR Engine Abstraction Layer and manage different processing paths for local vs. cloud engines.
 
 *   **Sub-component: Configuration Manager**
     *   **Complexity Assessment:** Low
@@ -142,15 +166,15 @@ This document provides development estimates for the OCR-X project, focusing on 
 
 *   **Testing (Integration, E2E - beyond unit tests)**
     *   **Complexity Assessment:** High
-    *   **Estimated Story Points:** 20
-    *   **Estimated Person-Hours:** 120-180 hours
-    *   **Assumptions & Notes:** Developing and executing integration tests for the pipeline, and end-to-end tests for the application. Includes setting up test datasets.
+    *   **Estimated Story Points:** 25
+    *   **Estimated Person-Hours:** 150-220 hours
+    *   **Assumptions & Notes:** Developing and executing integration tests for the pipeline, and end-to-end tests for the application. Includes setting up test datasets. Includes testing different engine selections, API key handling, and error conditions for cloud API calls.
 
 *   **Documentation (User & Developer)**
     *   **Complexity Assessment:** Medium
-    *   **Estimated Story Points:** 13
-    *   **Estimated Person-Hours:** 80-120 hours
-    *   **Assumptions & Notes:** Creating user manuals for the Windows application and developer documentation for component APIs and architecture.
+    *   **Estimated Story Points:** 16
+    *   **Estimated Person-Hours:** 100-150 hours
+    *   **Assumptions & Notes:** Creating user manuals for the Windows application and developer documentation for component APIs and architecture. Includes documenting API key setup for cloud services, engine selection choices, and data privacy notes for cloud usage.
 
 *   **CI/CD Pipeline Setup & Maintenance (Basic)**
     *   **Complexity Assessment:** Medium
@@ -162,10 +186,10 @@ This document provides development estimates for the OCR-X project, focusing on 
 
 | Category                               | Total Story Points | Total Person-Hours (Range) |
 |----------------------------------------|--------------------|----------------------------|
-| Core OCR Pipeline Components           | 93                 | 650 - 1030                 |
-| Application & Utility Components       | 54                 | 355 - 545                  |
-| Project Management & Overhead          | 49                 | 310 - 460                  |
-| **GRAND TOTAL (Option B - Initial)**   | **196**            | **1315 - 2035 hours**      |
+| Core OCR Pipeline Components           | 121                | 850 - 1320                 |
+| Application & Utility Components       | 63                 | 415 - 645                  |
+| Project Management & Overhead          | 57                 | 360 - 530                  |
+| **GRAND TOTAL (Option B - Flexible Hybrid Powerhouse - Initial)**   | **241**            | **1625 - 2495 hours**      |
 
 **Disclaimer:** These are rough, high-level estimates for an initial functional version. Actual effort can vary significantly based on team expertise, specific implementation choices, unforeseen challenges, and the desired level of polish and robustness for each component. The R&D nature of the "Simulated Quantum Error Correction" makes its estimate particularly speculative. These estimates assume a small, focused team.Okay, I have created the `OCR-X_Development_Estimates_OptionB.md` file with the detailed development estimates.
 

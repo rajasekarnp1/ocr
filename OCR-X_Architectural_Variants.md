@@ -6,7 +6,7 @@ This document outlines three distinct architectural variants for the OCR-X proje
 
 ### 1. Overall Architecture Description
 
-This approach combines the power of leading commercial cloud OCR APIs (Google Document AI, Azure AI Vision) for initial, high-accuracy text extraction and layout analysis, with locally executed custom modules for advanced pre-processing, specialized post-processing (including NLP error correction and simulated quantum-inspired refinement), and a rich Windows client experience. This aims for top-tier accuracy from cloud providers while allowing for innovative local enhancements and control over specific processing stages.
+This approach combines the power of leading commercial cloud OCR APIs (Google Document AI, Azure AI Vision) for initial, high-accuracy text extraction and layout analysis, with locally executed custom modules for advanced pre-processing, specialized post-processing (including NLP error correction and simulated quantum-inspired refinement), and a rich Windows client experience. This aims for top-tier accuracy from cloud providers while allowing for innovative local enhancements and control over specific processing stages. Unlike Option B, this variant does not include its own comprehensive local OCR engines but focuses exclusively on leveraging cloud OCR for the core recognition task, supported by local helper modules.
 
 ```mermaid
 graph TD
@@ -95,26 +95,38 @@ graph TD
     *   Secure storage of API keys (e.g., using Windows Credential Manager).
     *   Native Windows 11 styling through .NET MAUI.
 
-## Option B: On-Premise Powerhouse
+## Option B: Flexible Hybrid Powerhouse
 
 ### 1. Overall Architecture Description
 
-This variant focuses on a fully on-premise solution, prioritizing data privacy and control. It leverages a powerful ensemble of open-source OCR engines and custom-trained models, running entirely on the user's Windows machine or local network. Performance and accuracy are maximized through local hardware optimization (especially DirectML) and sophisticated pre/post-processing pipelines.
+This variant provides maximum flexibility by offering both high-performance, locally executed open-source OCR capabilities and the option to utilize leading commercial cloud OCR APIs. It prioritizes user choice, allowing a balance between data privacy/offline use (with local engines) and potentially higher accuracy or specialized features from cloud services. Local processing leverages DirectML for hardware acceleration. Sophisticated local pre and post-processing modules are applied regardless of the chosen OCR engine.
 
 ```mermaid
 graph TD
     subgraph "User Environment (Windows)"
         A[Windows Client - Python with PyQt/WinUI 3] -- Image/PDF Data --> B(Preprocessing Module);
-        B -- Preprocessed Data --> C{Core OCR Engine - Ensemble};
-        C -- Raw OCR Data --> D(Post-Processing Module);
+        B -- Preprocessed Data --> C_Local_OCR[Local OCR Ensemble - PaddleOCR, SVTR (ONNX/DirectML)];
+        B -- Preprocessed Data --> Cloud_GW{OCR Engine Abstraction Layer / Cloud Gateway};
+        Cloud_GW -- Data to Cloud --> G_API[Google Document AI API];
+        Cloud_GW -- Data to Cloud --> Azure_API[Azure AI Vision API];
+        G_API -- OCR Result --> Cloud_GW;
+        Azure_API -- OCR Result --> Cloud_GW;
+        C_Local_OCR -- Raw Local OCR Data --> D(Post-Processing Module);
+        Cloud_GW -- Selected Cloud OCR Data --> D;
         D -- Corrected Text --> E[Output to Client];
-        C -.-> F(Model Management & Retraining);
+        C_Local_OCR -.-> F(Local Model Management & Retraining);
+        A <-. Settings & Control .-> Cloud_GW; // For API keys, engine selection
+    end
+
+    subgraph "Cloud Services (External)"
+        G_API;
+        Azure_API;
     end
 
     subgraph "Local OCR Core & Processing Pipeline"
         direction LR
         B[Preprocessing - OpenCV, U-Net (ONNX)];
-        C[Recognition Ensemble - PaddleOCR PP-OCRv4 + SVTR (ONNX/DirectML)];
+        C_Local_OCR;
         D[PostProcessing - ByT5 (ONNX/DirectML), Qiskit-Simulated Quantum Correction];
     end
     
@@ -124,7 +136,10 @@ graph TD
 
     style A fill:#D6EAF8,stroke:#333,stroke-width:2px
     style B fill:#D1F2EB,stroke:#333,stroke-width:2px
-    style C fill:#AED6F1,stroke:#333,stroke-width:2px
+    style Cloud_GW fill:#FCF3CF,stroke:#333,stroke-width:2px
+    style G_API fill:#FADBD8,stroke:#333,stroke-width:2px
+    style Azure_API fill:#FADBD8,stroke:#333,stroke-width:2px
+    style C_Local_OCR fill:#AED6F1,stroke:#333,stroke-width:2px
     style D fill:#D1F2EB,stroke:#333,stroke-width:2px
     style E fill:#D6EAF8,stroke:#333,stroke-width:2px
     style F fill:#E8DAEF,stroke:#333,stroke-width:2px
@@ -136,9 +151,9 @@ graph TD
     *   Libraries: OpenCV for image manipulation.
     *   Models: U-Net based binarization (PyTorch/TensorFlow converted to ONNX), DeepXY simulation for geometric correction (ONNX). All models run locally using ONNX Runtime with DirectML.
 *   **Core Recognition Engine(s):**
-    *   **Primary Engine:** Ensemble of **PaddleOCR PP-OCRv4** (detection and recognition models) and **SVTR** (for robust text recognition). Models converted to ONNX for DirectML execution.
-    *   **Optimization:** Quantization (INT8) of ONNX models for speed, specific tuning of model parameters for target document types. Engine runs entirely locally.
-    *   Ensembling strategy: Could be rule-based (e.g., use SVTR for lines with detected complex scripts/fonts) or weighted voting based on confidence scores.
+    *   **Local OCR Engine Ensemble:** Leverages powerful open-source models like **PaddleOCR PP-OCRv4** (for detection and versatile recognition) and potentially **SVTR** (for robust recognition of complex text). These models are converted to ONNX and optimized (e.g., quantization) for local execution via DirectML, ensuring high performance on compatible hardware. Ensembling strategies can range from rule-based selection to weighted voting based on confidence scores.
+    *   **Cloud OCR Engine Integration:** Incorporates clients for leading commercial cloud OCR services, specifically **Google Document AI** and **Azure AI Vision**. This allows users to opt for these engines based on their needs.
+    *   **OCR Engine Abstraction Layer:** This crucial component (represented as `Cloud_GW` in the diagram) provides a unified interface for the rest of the application to interact with the OCR capabilities. It allows the user or system to select between the local engine ensemble or one of the integrated cloud engines. It handles the specifics of data marshalling for each selected engine and ensures that the output (raw OCR data) is presented in a consistent format to the subsequent Post-Processing Module.
 *   **Post-Processing:**
     *   **NLP Model:** Fine-tuned **ByT5** (ONNX/DirectML) for error correction.
     *   **Simulated Quantum Error Correction:** Qiskit-based QUBO formulation and simulation (as described in Option A) for resolving specific character ambiguities, running locally.
@@ -149,19 +164,20 @@ graph TD
     *   **Ground Truth/Synthetic Data:** Stored on local disk or a shared network drive. Tools like TRDG (TextRecognitionDataGenerator) integrated for synthetic data generation.
     *   **Models:** All models (preprocessing, OCR, post-processing) stored locally as ONNX files, packaged with the application or downloaded/updated from a central model repository (could be a simple file server or Git LFS).
 *   **APIs/Integration Points:**
-    *   Internal Python APIs for communication between client and OCR pipeline components.
-    *   No external API calls for core OCR functionality.
+    *   External: REST APIs of Google Document AI and Azure AI Vision (when cloud engines are selected).
+    *   Internal Python APIs for communication between client, abstraction layer, and OCR pipeline components.
 
 ### 3. Performance Considerations
 
 *   **Expected Accuracy Range:**
-    *   CER: 0.7% - 2.0% (Highly dependent on quality of open-source models, fine-tuning, and effectiveness of pre/post-processing). Ambitious target for fully on-premise.
-    *   WER: 1.5% - 3.5%.
+    *   CER: <0.5% - 1.5% (with Cloud APIs), 0.7% - 2.0% (with local ensemble). (Accuracy depends on the chosen engine, document type, and effectiveness of pre/post-processing).
+    *   WER: <1.0% - 2.5% (Cloud), 1.5% - 3.5% (Local).
 *   **Expected Speed/Latency:**
-    *   Speed: Aiming for 10-20 PPM on DirectML-compatible GPU, 3-7 PPM on modern CPU.
-    *   Latency: Lower latency per page compared to cloud, as no network overhead (e.g., 500ms - 2s per page, depending on complexity and hardware).
+    *   Speed: 10-20 PPM (local DirectML GPU), 3-7 PPM (local CPU). Cloud API throughput will depend on batching and API limits.
+    *   Latency: 0.5-1.5s/page (local DirectML), 1-5s/page (cloud APIs, network dependent).
+*   **Offline Capability:** Fully offline with local engines. Internet required for cloud engines.
 *   **Scalability Approach:**
-    *   Single-machine focus. Scalability is achieved by running on more powerful hardware. For batch processing, can utilize all available CPU cores and GPU.
+    *   Single-machine focus for local processing. Scalability is achieved by running on more powerful hardware. For batch processing, can utilize all available CPU cores and GPU. Cloud engine scalability is managed by the provider.
     *   No inherent multi-user scalability unless deployed on a powerful local server with a custom job management system.
 
 ### 4. Windows Integration Strategy
@@ -171,7 +187,7 @@ graph TD
     *   **Windows APIs:** For file system access, UI elements (if using WinUI 3), and potentially for background tasks.
     *   **MSIX Packaging:** For distribution and updates.
 *   **User Experience:**
-    *   Fully offline capability is a key selling point.
+    *   User choice between fully offline local processing (prioritizing privacy) or online cloud processing (potentially higher accuracy/specialized features). Clear UI for engine selection and API key management.
     *   UI to provide detailed progress and control over local processing.
     *   Installation should be straightforward with all dependencies bundled.
     *   Performance tuning options exposed to user (e.g., select CPU/GPU, batch size).

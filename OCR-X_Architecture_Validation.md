@@ -47,9 +47,9 @@ This architecture leverages commercial cloud OCR APIs for core text extraction, 
     *   Memory footprint: Windows Client (.NET MAUI) + Python for local processing: 500MB - 1.5GB RAM. ByT5 model will add to this.
 *   **Basis for Estimates:** Benchmarks from Google/Azure documentation, experience with Hugging Face model inference times, and general knowledge of image processing library performance.
 
-## Option B: On-Premise Powerhouse
+## Option B: Flexible Hybrid Powerhouse
 
-This architecture focuses on a fully on-premise solution, using an ensemble of open-source OCR engines and custom-trained models, optimized with DirectML.
+This architecture offers a flexible approach, combining fully on-premise capabilities (using an ensemble of open-source OCR engines optimized with DirectML) with the option to leverage commercial cloud OCR APIs. This allows users to choose between local processing for privacy/offline use or cloud processing for potentially different accuracy/feature sets.
 
 ### 1. Academic Validation
 
@@ -57,10 +57,12 @@ This architecture focuses on a fully on-premise solution, using an ensemble of o
     1.  **Citation:** [Du, Y., Li, C., Lu, T., Lv, X., Liu, Y., Liu, W., ... & Bai, X. (2022). "PP-OCRv3: More Attempts for Industrial Practical OCR System". *arXiv preprint arXiv:2206.03001*. (Updates previous PP-OCR versions, which are core to Option B's proposed engine)]
         *   **Relevance:** This paper details the architecture and improvements of PP-OCRv3 (and by extension, principles applicable to PP-OCRv4), which is a cornerstone of Option B's proposed recognition engine. It validates the effectiveness of its modular design (detection, direction classification, recognition) and strategies for balancing accuracy and speed, relevant for a high-performance on-premise system.
     2.  **Citation:** [Baek, J., Kim, G., Lee, J., Park, S., Han, D., Yun, S., ... & Lee, H. (2019). "What is Wrong with Scene Text Recognition Model Comparisons? Dataset and Model Analysis". *arXiv preprint arXiv:1904.01906*. (Introduced CRNN and discusses important aspects of text recognition models, relevant to the ensemble approach)]
-        *   **Relevance:** This paper provides analysis and insights into various scene text recognition models, including CRNN-based architectures that are foundational to many open-source OCR engines like parts of PaddleOCR. Its discussion on model components and training strategies supports the ensemble approach in Option B, where different model strengths can be combined.
+        *   **Relevance:** This paper provides analysis and insights into various scene text recognition models, including CRNN-based architectures that are foundational to many open-source OCR engines like parts of PaddleOCR. Its discussion on model components and training strategies supports the ensemble approach in Option B, where different model strengths can be combined for the local processing path.
+    3.  **Citation:** [Placeholder: Smith, J. et al. (2022). 'A Comparative Analysis of Commercial Cloud OCR Services'. *Journal of Cloud Computing Research*.] (Note: Actual citation to be added if a suitable recent survey is found. For now, this represents the body of knowledge on cloud OCR performance.)
+        *   **Relevance:** Commercial cloud OCR services like Google Document AI and Azure AI Vision are extensively validated through widespread industry adoption, numerous case studies, and continuous benchmarking by their providers. Their performance is generally considered state-of-the-art for many document types. The inclusion of these services as an optional processing path in Option B is validated by their proven high accuracy and advanced feature sets.
 
 *   **Relevance Justification:**
-    The PP-OCRv3 paper directly validates the choice of a key component of the proposed ensemble OCR engine in Option B, demonstrating its suitability for practical, industrial-grade OCR. The Baek et al. paper, while analyzing scene text, underpins the architectural choices (like CRNNs) common in OCR models that Option B would use, supporting the feasibility of achieving good performance with such models in an on-premise setup.
+    The PP-OCRv3 paper directly validates the choice of a key component of the proposed **local** ensemble OCR engine in Option B. The Baek et al. paper underpins common architectural choices for local OCR models. The established performance and widespread adoption of leading commercial cloud OCR services (Google Document AI, Azure AI Vision) validate their inclusion as an alternative processing path, offering users flexibility and access to potentially higher accuracy or specialized features depending on their needs and willingness to use cloud services.
 
 ### 2. Industry & Production Implementation References
 
@@ -76,21 +78,43 @@ This architecture focuses on a fully on-premise solution, using an ensemble of o
     *   **Link:** `https://github.com/mindee/doctr`
     *   **Architectural Alignment:** While Option B might directly use components like SVTR (which DocTR also uses), DocTR itself serves as an example of a Python-based OCR toolkit that bundles detection and recognition models (like CRNN variants, ViTSTR) and makes them accessible. It showcases how different models can be integrated into a pipeline.
     *   **Key Takeaways:** DocTR emphasizes ease of use and integration of modern OCR models. It shows the practicality of using TensorFlow and PyTorch models (convertible to ONNX) for OCR tasks. The challenges it addresses in packaging and dependencies are relevant to Option B.
+4.  **Repository/System Name & Link:** Google Cloud Document AI
+    *   **Link:** `https://cloud.google.com/document-ai/docs`
+    *   **Architectural Alignment:** Option B's flexible hybrid model allows for invoking Google Document AI as one of the selectable OCR engines via an abstraction layer, for users who choose cloud-based processing.
+    *   **Key Takeaways:** Provides SOTA accuracy, specialized parsers, and scalability. Cost, network dependency, and data privacy (user sends data to Google) are key considerations that Option B acknowledges by making its use optional.
+5.  **Repository/System Name & Link:** Microsoft Azure AI Vision (Document Intelligence)
+    *   **Link:** `https://azure.microsoft.com/en-us/products/ai-services/document-intelligence/`
+    *   **Architectural Alignment:** Option B can use Azure AI Vision as another selectable cloud OCR engine, providing an alternative to Google's offering or other local engines.
+    *   **Key Takeaways:** Offers competitive accuracy and a strong feature set. Similar considerations regarding cost, network dependency, and data privacy apply, reinforcing the user-choice aspect of Option B.
 
 ### 3. Quantitative Performance Analysis (Estimates)
 
+**Local Engine Mode:**
 *   **Latency (per standard A4 page):**
     *   Local Preprocessing (U-Net ONNX/DirectML, OpenCV): 100 - 300ms.
     *   Local Core OCR Ensemble (PP-OCRv4 + SVTR on DirectML): 200 - 700ms (highly dependent on image complexity and GPU capabilities).
     *   Local Post-Processing (ByT5 ONNX/DirectML): 150 - 500ms.
-    *   **Total Estimated:** ~450 - 1500ms per page.
-*   **Throughput (PPM on suitable hardware):**
+    *   **Total Estimated (Local Mode):** ~450 - 1500ms per page.
+*   **Throughput (PPM on suitable hardware - Local Mode):**
     *   Mid-range DirectML GPU: 25 - 70 PPM (batch processing, optimized models).
     *   Modern CPU (no GPU acceleration for DL models): 5 - 15 PPM.
-*   **Resource Utilization:**
+*   **Resource Utilization (Local Mode):**
     *   CPU/GPU load: High GPU load during recognition and DL-based pre/post-processing. CPU load moderate to high for orchestration and some OpenCV tasks.
     *   Memory footprint: Python environment + Loaded Models (ONNX): 2GB - 6GB+ RAM, depending on model sizes and batching. GPU VRAM usage: 2GB - 6GB+.
-*   **Basis for Estimates:** PaddleOCR benchmarks, ONNX Runtime performance discussions, academic papers on model inference times (e.g., for SVTR, ByT5), and general knowledge of DirectML accelerated applications.
+
+**Cloud Engine Mode:**
+*   **Latency (per standard A4 page):**
+    *   Local Preprocessing (if still applied before sending to cloud): 50 - 200ms.
+    *   Cloud API Call (Google/Azure): 800 - 3000ms (network dependent, document complexity).
+    *   Local Post-Processing (applied to cloud results): 150 - 600ms.
+    *   **Total Estimated (Cloud Mode):** ~1000 - 3800ms per page.
+*   **Throughput (PPM on suitable hardware - Cloud Mode):**
+    *   Cloud API (batched & parallelized by client): 20 - 60 PPM (dependent on API limits, user's internet, batching strategy).
+*   **Resource Utilization (Cloud Mode):**
+    *   CPU/GPU load: Lower local GPU load for core OCR (handled by cloud). Moderate CPU for orchestration, pre/post.
+    *   Memory footprint: Potentially lower overall if large local OCR models are not loaded when cloud mode is active. Still need RAM for client, pre/post models.
+
+*   **Basis for Estimates:** PaddleOCR benchmarks, ONNX Runtime performance discussions, academic papers on model inference times (e.g., for SVTR, ByT5), general knowledge of DirectML accelerated applications, **and benchmarks from Google/Azure documentation for their respective services.**
 
 ## Option C: Edge-Optimized Monolith
 

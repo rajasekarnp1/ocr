@@ -1,14 +1,14 @@
-# OCR-X Project: Phased Development Plan (Option B - On-Premise Powerhouse)
+# OCR-X Project: Phased Development Plan (Option B - Flexible Hybrid Powerhouse)
 
-This document outlines a phased development plan for the OCR-X project, based on the selected architecture: Option B - On-Premise Powerhouse.
+This document outlines a phased development plan for the OCR-X project, based on the selected architecture: Option B - Flexible Hybrid Powerhouse.
 
 ## I. Overall Phasing Strategy
 
-The development of OCR-X will follow an iterative and incremental approach. The initial focus will be on delivering a Minimum Viable Product (MVP) that establishes the core OCR pipeline and validates the key architectural decisions of Option B. Subsequent phases will build upon the MVP, incrementally adding features, enhancing performance and accuracy, and refining the user experience based on feedback and evolving requirements. This strategy allows for early validation, risk mitigation, and a flexible response to development challenges and opportunities.
+The development of OCR-X will follow an iterative and incremental approach. The initial focus will be on delivering a Minimum Viable Product (MVP) that establishes the core OCR pipeline and validates the key architectural decisions of Option B, which combines local DirectML accelerated engines with the ability to switch to leading commercial cloud OCR APIs. Subsequent phases will build upon the MVP, incrementally adding features, enhancing performance and accuracy, and refining the user experience based on feedback and evolving requirements. This strategy allows for early validation, risk mitigation, and a flexible response to development challenges and opportunities.
 
 ## II. Phase 1: Minimum Viable Product (MVP)
 
-*   **Goal:** Deliver a functional core OCR system for Windows that achieves high accuracy on common machine-printed documents and demonstrates key architectural components of Option B, including basic DirectML integration.
+*   **Goal:** Deliver a functional core OCR system for Windows that allows selection between a local DirectML-accelerated open-source engine and at least one commercial cloud OCR API, achieves high accuracy on common machine-printed documents, and demonstrates key architectural components of Option B.
 *   **Core Features (MoSCoW Prioritization for MVP):**
     *   **Must Have:**
         *   **Input Handling:**
@@ -18,7 +18,10 @@ The development of OCR-X will follow an iterative and incremental approach. The 
             *   Basic geometric correction: Skew correction using OpenCV.
             *   Binarization: Standard Otsu's thresholding or Sauvola/Niblack adaptive thresholding from OpenCV.
         *   **Recognition Engine:**
+            *   OCR Engine Abstraction Layer: Initial version to support switching between different OCR engine implementations.
             *   Integration of a single, robust open-source engine: PaddleOCR PP-OCRv4 (detection + recognition models for English).
+            *   Integration of one commercial cloud OCR API (e.g., Google Document AI or Azure AI Vision) via the abstraction layer.
+            *   Basic API Key Management: Securely load API key for the selected cloud service from a configuration file or environment variable.
             *   ONNX conversion of the selected engine's models.
             *   Basic DirectML inference via ONNX Runtime for the core recognition engine.
         *   **Post-Processing:**
@@ -28,7 +31,7 @@ The development of OCR-X will follow an iterative and incremental approach. The 
                 *   File selection (JPG, PNG, PDF).
                 *   Button to trigger OCR processing.
                 *   Display area for plain text results.
-            *   Basic configuration: Language selection (English fixed for MVP models).
+            *   Basic configuration: Language selection (English), OCR engine selection (Local PaddleOCR vs. integrated Cloud API).
         *   **Core Accuracy:**
             *   Achieve CER < 2% and WER < 5% on a curated internal benchmark dataset of common English machine-printed documents.
     *   **Should Have (for MVP, if time permits, otherwise Phase 1.1):**
@@ -44,29 +47,37 @@ The development of OCR-X will follow an iterative and incremental approach. The 
         *   Advanced layout understanding (multi-column, tables).
         *   Full-featured Windows UI with extensive settings, advanced result presentation, etc.
         *   Searchable PDF output.
+        *   Simultaneous processing by multiple cloud APIs.
+        *   Advanced UI for API key entry/management (beyond config file).
 *   **Success Metrics for MVP:**
     *   Successful OCR processing of at least 100 diverse test documents (JPG, PNG, single-page PDF content) with accuracy meeting the baseline CER < 2%, WER < 5%.
     *   Stable execution of the application on target Windows 10/11 environments (2-3 distinct hardware configurations).
     *   Demonstrable performance improvement (e.g., >30% speedup in recognition stage) using DirectML-accelerated inference compared to CPU-only inference for the PaddleOCR engine on compatible hardware.
+    *   Successful OCR processing using both the local engine and the selected cloud API, switchable by the user.
+    *   Demonstrable secure loading of API key for the cloud service.
 *   **Estimated Duration:**
-    *   Drawing from `OCR-X_Development_Estimates_OptionB.md` for relevant MVP "Must Have" components:
+    *   Drawing from `OCR-X_Development_Estimates_OptionB.md` and new estimates for hybrid capabilities:
         *   Image Acquisition (JPG, PNG, PDF-single): ~4 SP (30-50 hrs)
         *   Format Conversion: 3 SP (20-30 hrs)
-        *   Basic Preprocessing (Skew, Otsu/Sauvola): ~3 SP (20-30 hrs) (subset of Noise Reduction/Enhancement)
-        *   PaddleOCR Integration (subset for single engine focus): ~4 SP (30-45 hrs)
-        *   ONNX Conversion & Basic DirectML (for PaddleOCR only initially): ~7 SP (40-60 hrs) (subset of full ONNX task)
-        *   Basic Text Output: ~1 SP (5-10 hrs) (subset of Formatting)
-        *   Simple PyQt6 UI (core MVP features): ~10 SP (70-100 hrs) (subset of full UI)
-        *   OCR Workflow Orchestrator (MVP scope): ~4 SP (30-45 hrs) (subset)
-        *   Basic Config Manager: ~1 SP (5-10 hrs) (subset)
-        *   Testing & MVP Documentation: ~10 SP (70-100 hrs) (subset of overall testing/docs)
-    *   **Total Estimated MVP Story Points:** ~47 SP
-    *   **Estimated MVP Person-Hours:** ~325 - 525 hours.
-    *   **Estimated MVP Duration:** Approximately **3-4 months** with a small dedicated team (e.g., 2-3 developers) working focused sprints.
+        *   Basic Preprocessing (Skew, Otsu/Sauvola): ~3 SP (20-30 hrs)
+        *   **OCR Engine Abstraction Layer:** 8 SP (50-70 hrs)
+        *   **PaddleOCR Integration (local engine):** ~4 SP (30-45 hrs)
+        *   **Integration of one Commercial Cloud OCR API:** 10 SP (70-100 hrs)
+        *   **Basic API Key Management:** 3 SP (20-30 hrs)
+        *   ONNX Conversion & Basic DirectML (for PaddleOCR): ~7 SP (40-60 hrs)
+        *   Basic Text Output: ~1 SP (5-10 hrs)
+        *   Simple PyQt6 UI (core MVP features, including engine selection): ~10 SP (70-100 hrs)
+        *   OCR Workflow Orchestrator (MVP scope): ~4 SP (30-45 hrs)
+        *   Basic Config Manager (updated for engine selection): ~1 SP (5-10 hrs)
+        *   Testing & MVP Documentation (including hybrid aspects): ~10 SP (70-100 hrs)
+    *   **Total Estimated MVP Story Points:** ~68 SP
+    *   **Estimated MVP Person-Hours:** ~490 - 745 hours. (Sum of mid-points: 40+25+25+60+37.5+85+25+50+7.5+85+37.5+7.5+85 = 515. Low sum: 30+20+20+50+30+70+20+40+5+70+30+5+70 = 440. High sum: 50+30+30+70+45+100+30+60+10+100+45+10+100 = 680. Recalculated: Low: 325-20(Format Conversion removed from original list?)+50+70+20 = 445. High: 525-30+70+100+30 = 695. Adjusted range based on SP to Person-Hour ratio of original estimate for 47SP: (325/47) to (525/47) => 6.9 to 11.16 hrs/SP. For 68SP: 68*6.9 = 469.2, 68*11.16 = 758.88. So, ~470-760 hours)
+    *   **Estimated MVP Person-Hours:** ~470 - 760 hours.
+    *   **Estimated MVP Duration:** Approximately **4-5 months** with a small dedicated team (e.g., 2-3 developers) working focused sprints. (Increased due to higher SP)
 
 ## III. Phase 1.1: MVP Enhancement & Core Stability
 
-*   **Goal:** Improve MVP robustness, integrate the second core OCR engine for ensemble, add initial advanced preprocessing features, and refine the core pipeline based on MVP feedback and more comprehensive testing.
+*   **Goal:** Improve MVP robustness, integrate additional cloud OCR options, refine the hybrid engine abstraction and API key management, add initial advanced preprocessing features, and enhance the core pipeline based on MVP feedback and more comprehensive testing.
 *   **Features (MoSCoW):**
     *   **Must Have:**
         *   **Preprocessing:**
@@ -75,12 +86,15 @@ The development of OCR-X will follow an iterative and incremental approach. The 
             *   Clipboard image input (if not completed in MVP).
             *   Basic noise reduction (if not in MVP).
         *   **Recognition Engine:**
-            *   Full integration of the second recognition engine (e.g., SVTR), including ONNX conversion and DirectML optimization.
-            *   Implementation of the ensemble/voting logic (e.g., confidence-based weighting) between PaddleOCR and SVTR.
+            *   Full integration of the second recognition engine (e.g., SVTR), including ONNX conversion and DirectML optimization. (This refers to a second *local* engine if pursued, distinct from cloud APIs)
+            *   Implementation of the ensemble/voting logic (e.g., confidence-based weighting) between local engines like PaddleOCR and SVTR, if SVTR is added.
+            *   Integration of the second commercial cloud OCR API (if not Google Document AI in MVP, then Azure AI Vision, or vice-versa) via the abstraction layer.
+            *   Refinement of OCR Engine Abstraction Layer: Improve robustness and potentially add features for easier engine switching or metadata handling.
         *   **Post-Processing:**
             *   Basic rule-based error correction or a very lightweight NLP model (e.g., dictionary-based corrections, common OCR error patterns).
         *   **Windows Client:**
-            *   Enhanced UI: Improved presentation of OCR results (e.g., side-by-side image and text, basic bounding box overlays if feasible).
+            *   Enhanced UI: Improved presentation of OCR results (e.g., side-by-side image and text, basic bounding box overlays if feasible), clearer selection and status indication for the chosen OCR engine (local vs. specific cloud provider).
+            *   Enhanced API Key Management: If needed, provide a more user-friendly way to configure API keys (e.g., simple UI dialog that saves to secure config).
             *   More robust progress indicators and error reporting.
             *   Persistence of basic user settings.
         *   **Stability & Testing:** Address bugs and stability issues identified in MVP. Expand test coverage.
@@ -92,18 +106,21 @@ The development of OCR-X will follow an iterative and incremental approach. The 
 *   **Estimated Duration:**
     *   Adaptive Binarization (U-Net): 13 SP (80-120 hrs)
     *   Geometric Correction (DeepXY): 13 SP (80-120 hrs)
-    *   SVTR Integration: 8 SP (60-90 hrs)
-    *   Remaining ONNX & DirectML for SVTR & Preprocessing models: ~13 SP (80-120 hrs) (balance of full ONNX task)
-    *   Ensemble Logic: 5 SP (30-50 hrs)
+    *   SVTR Integration (second *local* engine, if pursued): 8 SP (60-90 hrs)
+    *   Remaining ONNX & DirectML for SVTR & Preprocessing models: ~13 SP (80-120 hrs)
+    *   Ensemble Logic (for local engines): 5 SP (30-50 hrs)
+    *   **Integration of the second Commercial Cloud OCR API:** 10 SP (70-100 hrs)
+    *   **Refinement of OCR Engine Abstraction Layer:** 5 SP (30-50 hrs)
     *   Rule-based/Light NLP: ~3 SP (20-30 hrs)
-    *   UI Enhancements: ~5 SP (35-50 hrs)
-    *   **Total Estimated Phase 1.1 Story Points:** ~50-60 SP
-    *   **Estimated Phase 1.1 Person-Hours:** ~385 - 580 hours.
-    *   **Estimated Phase 1.1 Duration:** Additional **3-4 months**.
+    *   UI Enhancements (including engine selection clarity): ~5 SP (35-50 hrs)
+    *   **Enhanced API Key Management (UI):** 4 SP (25-40 hrs)
+    *   **Total Estimated Phase 1.1 Story Points:** ~69-79 SP (Original 50-60 + 19 new)
+    *   **Estimated Phase 1.1 Person-Hours:** ~530 - 765 hours.
+    *   **Estimated Phase 1.1 Duration:** Additional **4-5 months**.
 
 ## IV. Phase 1.2: Advanced Features & Optimization
 
-*   **Goal:** Integrate full advanced correction techniques (ByT5, Qiskit PoC), establish the synthetic data pipeline for continuous improvement, and further optimize performance and accuracy across the Windows ecosystem.
+*   **Goal:** Integrate full advanced correction techniques (ByT5, Qiskit PoC), establish the synthetic data pipeline for continuous improvement, optimize the hybrid system's performance and usability, and further enhance accuracy across the Windows ecosystem.
 *   **Features (MoSCoW):**
     *   **Must Have:**
         *   **Post-Processing:**
@@ -114,9 +131,11 @@ The development of OCR-X will follow an iterative and incremental approach. The 
             *   Basic Training/Fine-tuning Scripts for key models (e.g., ByT5 on OCR errors, potentially one of the core OCR models on synthetic data).
             *   Model Repository setup (Git LFS).
         *   **Windows Client & Performance:**
-            *   Further DirectML optimizations across the entire pipeline based on profiling.
+            *   Further DirectML optimizations across the entire pipeline based on profiling (for local engines).
             *   Searchable PDF output format.
             *   User-configurable options for preprocessing and post-processing steps.
+            *   Comparative performance analysis reporting (accuracy, speed) between local and various cloud engines on benchmark datasets.
+            *   User guidance or documentation on choosing the appropriate engine based on needs (e.g., privacy/offline vs. specific accuracy needs).
     *   **Should Have:**
         *   More advanced layout understanding (e.g., simple table detection, multi-column text flow).
         *   Comprehensive documentation (User & Developer).
@@ -128,12 +147,14 @@ The development of OCR-X will follow an iterative and incremental approach. The 
     *   Qiskit PoC: 20 SP (150-250 hrs)
     *   Synthetic Data Pipeline: 7 SP (40-70 hrs)
     *   Basic Training Scripts & Repo: 16 SP (95-155 hrs)
-    *   Searchable PDF & UI Config: ~7 SP (50-70 hrs) (part of Formatting & UI estimates)
+    *   Searchable PDF & UI Config: ~7 SP (50-70 hrs)
     *   Advanced Layout (Simple Table): ~5 SP (40-60 hrs)
-    *   Documentation & CI/CD (if included here): ~21 SP (130-200 hrs)
-    *   **Total Estimated Phase 1.2 Story Points:** ~70-90 SP
-    *   **Estimated Phase 1.2 Person-Hours:** ~585 - 925 hours.
-    *   **Estimated Phase 1.2 Duration:** Additional **4-6 months**.
+    *   **Comparative performance analysis reporting:** 5 SP (30-50 hrs)
+    *   **User guidance on engine choice (documentation):** 3 SP (20-30 hrs)
+    *   Documentation & CI/CD (if included here, may absorb user guidance): ~21 SP (130-200 hrs)
+    *   **Total Estimated Phase 1.2 Story Points:** ~78-98 SP (Original 70-90 + 8 new)
+    *   **Estimated Phase 1.2 Person-Hours:** ~650 - 1010 hours.
+    *   **Estimated Phase 1.2 Duration:** Additional **5-7 months**. (Adjusted due to higher SP and complexity)
 
 ## V. Subsequent Phases (High-Level)
 
