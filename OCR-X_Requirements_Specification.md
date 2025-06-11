@@ -29,14 +29,18 @@ This document outlines the SMART (Specific, Measurable, Achievable, Relevant, Ti
 
 ### FR3: Hybrid Recognition Engine
 
-*   **Specific:** The system shall utilize a hybrid recognition architecture, potentially an ensemble of diverse SOTA models (e.g., combining a transformer-based recognizer like TrOCR or SVTR with a CRNN-based model like PP-OCRv4's recognizer) or a dynamic model selection mechanism based on input characteristics (e.g., detected script, image quality, presence of tables).
-*   **Measurable:** Accuracy improvement (CER reduction of at least 3-5%) on a challenging, mixed-quality document benchmark (containing varied fonts, noise levels, and simple layouts) compared to using the best single constituent SOTA model within the ensemble.
-*   **Achievable:** Research and implement model fusion techniques (e.g., weighted averaging of confidence scores, voting) or develop a lightweight classifier for dynamic model selection. This requires careful model selection and engineering.
-*   **Relevant:** Aims to provide robustness and higher overall accuracy across a wider variety of inputs and edge cases, a common pain point identified in the feature gap analysis.
+*   **Specific:** The system shall implement a flexible recognition architecture, allowing selection between a locally executed ensemble of SOTA open-source models (e.g., PaddleOCR, SVTR) and leading commercial cloud OCR APIs (e.g., Google Document AI, Azure AI Vision). This selection can be user-driven (manual choice) or potentially dynamic based on input characteristics, configured preferences, or rules.
+*   **Measurable:**
+    *   Demonstrable ability to process documents using either the selected local engine ensemble or a configured commercial cloud API.
+    *   For the local ensemble: Accuracy improvement (CER reduction of at least 3-5%) on a challenging, mixed-quality document benchmark compared to using its best single constituent SOTA model.
+    *   For cloud API integration: Successful OCR processing with results comparable to the chosen API's advertised capabilities on standard benchmarks.
+    *   User interface allows clear selection of the desired OCR engine.
+*   **Achievable:** Implement an abstraction layer for OCR engines. Integrate selected local open-source models (PaddleOCR, SVTR) and develop clients for target commercial cloud APIs. User configuration for engine selection is straightforward. Dynamic selection is more complex and a stretch goal.
+*   **Relevant:** Provides users with choices balancing accuracy, privacy (local processing), cost (cloud APIs), and specific feature needs. Aims to provide robustness and higher overall accuracy across a wider variety of inputs and edge cases.
 *   **Time-bound:**
-    *   **MVP:** Focus on a single, highly robust SOTA model.
-    *   **v1.0:** Implement a static ensemble of two diverse models.
-    *   **v1.1 / Post v1.0:** Research and implement dynamic model selection.
+    *   **MVP Target:** Allow user selection between one local SOTA model (e.g., PaddleOCR) and one integrated commercial cloud API.
+    *   **v1.0 Target:** Enhance local ensemble (e.g., two diverse local models). Potentially add a second cloud API option. Refine selection mechanism.
+    *   **v1.1 / Post v1.0:** Research and implement dynamic model selection based on input characteristics or rule engine.
 
 ### FR4: Advanced Post-Processing Module
 
@@ -52,16 +56,16 @@ This document outlines the SMART (Specific, Measurable, Achievable, Relevant, Ti
 
 ### FR5: Windows Native Application & Performance
 
-*   **Specific:** OCR-X shall be available as a native Windows application (targeting Windows 10 and 11) with an intuitive, user-friendly graphical interface for common OCR tasks (image/PDF input, text output, basic configuration). It must leverage DirectML for GPU acceleration on compatible hardware to enhance processing speed. When using on-premise engines, DirectML is critical. When using cloud-based engines, performance will be characterized by API response times and network latency.
+*   **Specific:** OCR-X shall be available as a native Windows application (targeting Windows 10 and 11) with an intuitive, user-friendly graphical interface for common OCR tasks (image/PDF input, text output, basic configuration). Basic configuration must include OCR engine selection (between available local and cloud engines) and a secure method for users to input and manage API keys for commercial cloud services. The UI must clearly indicate the currently active/selected OCR engine. It must leverage DirectML for GPU acceleration on compatible hardware to enhance processing speed for local engines. When using on-premise engines, DirectML is critical. When using cloud-based engines, performance will be characterized by API response times and network latency.
 *   **Measurable:**
     *   Processing speed for **on-premise engines** of at least 15-25 pages per minute (PPM) on a specified mid-range Windows machine with a DirectML compatible GPU (e.g., NVIDIA GTX 1660 / AMD RX 5600) for standard A4 documents at 300 DPI. CPU-only speed target: 5-10 PPM on a modern quad-core CPU. Processing speed and latency for **cloud-based engines** will also be benchmarked and documented, considering API call overheads and typical network conditions.
     *   UI responsiveness: key interactions (e.g., opening file, starting OCR, displaying results) completed within 1-2 seconds.
-*   **Achievable:** Develop UI using .NET (WPF or WinUI 3) or Python with PyQt/Tkinter ensuring good Windows integration. Integrate DirectML backends from PyTorch or TensorFlow. Performance targets are set to be competitive with existing desktop tools.
+    *   Successful configuration and use of API keys for cloud services. UI clearly displays active engine.
+*   **Achievable:** Develop UI using .NET (WPF or WinUI 3) or Python with PyQt/Tkinter ensuring good Windows integration. Integrate DirectML backends from PyTorch or TensorFlow. API key management can leverage secure storage like Windows Credential Manager. Performance targets are set to be competitive with existing desktop tools.
 *   **Relevant:** Directly addresses user persona needs (e.g., David Lee, Maria Garcia) and feature gap analysis for a robust, performant Windows application.
 *   **Time-bound:**
-    *   **MVP:** Basic command-line interface with DirectML support. Core OCR engine functional.
-    *   **v0.9 (Pre-1.0):** Initial Windows GUI with core functionality (load image/PDF, OCR, display text).
-    *   **v1.0:** Full-featured Windows UI as specified, with stable DirectML integration and performance meeting PPM targets.
+    *   **MVP Target:** Simple Windows GUI (e.g., using PyQt6) with core functionality: image/PDF input, selection between one local and one cloud OCR engine, basic API key configuration (from file/env var), OCR initiation, and plain text result display. DirectML support for the local engine.
+    *   **v1.0 Target:** Full-featured Windows UI as specified (enhanced settings, result presentation), with stable DirectML integration and performance meeting PPM targets. Integration of additional local/cloud engines as per FR3. More robust API key management UI.
 
 ### FR6: Layout Understanding (Basic to Intermediate)
 
@@ -79,7 +83,7 @@ This document outlines the SMART (Specific, Measurable, Achievable, Relevant, Ti
 
 ### FR7: Synthetic Data Generation & Retraining Pipeline
 
-*   **Specific:** A robust and automated pipeline for generating diverse synthetic training data (using tools like TRDG, SynthDoG, or custom scripts leveraging Blender/Unity for complex scenes if needed) and for retraining/fine-tuning the core OCR models (both recognition and potentially layout models) shall be established.
+*   **Specific:** A robust and automated pipeline for generating diverse synthetic training data (using tools like TRDG, SynthDoG, or custom scripts leveraging Blender/Unity for complex scenes if needed) and for retraining/fine-tuning the **core local OCR models** (both recognition and potentially layout models) shall be established.
 *   **Measurable:**
     *   Ability to generate at least 1-2 million diverse training image samples (cropped text lines or full pages) per week, covering various fonts, backgrounds, noise patterns, and distortions.
     *   Demonstrable improvement in OCR accuracy (e.g., CER reduction of 5-10%) on specific challenging out-of-distribution datasets after fine-tuning with newly generated synthetic data.

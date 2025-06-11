@@ -21,9 +21,9 @@ The development of OCR-X will follow an iterative and incremental approach. The 
             *   OCR Engine Abstraction Layer: Initial version to support switching between different OCR engine implementations.
             *   Integration of a single, robust open-source engine: PaddleOCR PP-OCRv4 (detection + recognition models for English).
             *   Integration of one commercial cloud OCR API (e.g., Google Document AI or Azure AI Vision) via the abstraction layer.
-            *   Basic API Key Management: Securely load API key for the selected cloud service from a configuration file or environment variable.
-            *   ONNX conversion of the selected engine's models.
-            *   Basic DirectML inference via ONNX Runtime for the core recognition engine.
+            *   Basic API Key Management: Securely load API key for the selected cloud service from a configuration file or environment variable for the MVP.
+            *   ONNX conversion of the selected *local* engine's models (e.g., PaddleOCR).
+            *   Basic DirectML inference via ONNX Runtime for the core *local* recognition engine.
         *   **Post-Processing:**
             *   Basic text output formatting (plain text).
         *   **Windows Client:**
@@ -63,16 +63,15 @@ The development of OCR-X will follow an iterative and incremental approach. The 
         *   **OCR Engine Abstraction Layer:** 8 SP (50-70 hrs)
         *   **PaddleOCR Integration (local engine):** ~4 SP (30-45 hrs)
         *   **Integration of one Commercial Cloud OCR API:** 10 SP (70-100 hrs)
-        *   **Basic API Key Management:** 3 SP (20-30 hrs)
-        *   ONNX Conversion & Basic DirectML (for PaddleOCR): ~7 SP (40-60 hrs)
+        *   **Basic API Key Management (MVP scope - config file/env var):** 3 SP (20-30 hrs)
+        *   ONNX Conversion & Basic DirectML (for local PaddleOCR engine): ~7 SP (40-60 hrs)
         *   Basic Text Output: ~1 SP (5-10 hrs)
         *   Simple PyQt6 UI (core MVP features, including engine selection): ~10 SP (70-100 hrs)
-        *   OCR Workflow Orchestrator (MVP scope): ~4 SP (30-45 hrs)
-        *   Basic Config Manager (updated for engine selection): ~1 SP (5-10 hrs)
-        *   Testing & MVP Documentation (including hybrid aspects): ~10 SP (70-100 hrs)
+        *   OCR Workflow Orchestrator (MVP scope, handling abstraction layer): ~4 SP (30-45 hrs)
+        *   Basic Config Manager (updated for engine selection & API key loading): ~1 SP (5-10 hrs)
+        *   Testing & MVP Documentation (covering local & one cloud path, abstraction layer basics): ~10 SP (70-100 hrs)
     *   **Total Estimated MVP Story Points:** ~68 SP
-    *   **Estimated MVP Person-Hours:** ~490 - 745 hours. (Sum of mid-points: 40+25+25+60+37.5+85+25+50+7.5+85+37.5+7.5+85 = 515. Low sum: 30+20+20+50+30+70+20+40+5+70+30+5+70 = 440. High sum: 50+30+30+70+45+100+30+60+10+100+45+10+100 = 680. Recalculated: Low: 325-20(Format Conversion removed from original list?)+50+70+20 = 445. High: 525-30+70+100+30 = 695. Adjusted range based on SP to Person-Hour ratio of original estimate for 47SP: (325/47) to (525/47) => 6.9 to 11.16 hrs/SP. For 68SP: 68*6.9 = 469.2, 68*11.16 = 758.88. So, ~470-760 hours)
-    *   **Estimated MVP Person-Hours:** ~470 - 760 hours.
+    *   **Estimated MVP Person-Hours:** ~470 - 760 hours. (Ratio of ~6.9 to ~11.18 hrs/SP applied to 68 SP)
     *   **Estimated MVP Duration:** Approximately **4-5 months** with a small dedicated team (e.g., 2-3 developers) working focused sprints. (Increased due to higher SP)
 
 ## III. Phase 1.1: MVP Enhancement & Core Stability

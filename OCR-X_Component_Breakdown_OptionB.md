@@ -1,6 +1,6 @@
-# OCR-X Project: Component Breakdown (Option B - On-Premise Powerhouse)
+# OCR-X Project: Component Breakdown (Option B - Flexible Hybrid Powerhouse)
 
-This document details the component breakdown for the OCR-X project, based on the selected architecture: Option B - On-Premise Powerhouse. This architecture emphasizes a fully on-premise solution, leveraging open-source OCR engines, custom-trained models, and DirectML for performance on Windows.
+This document details the component breakdown for the OCR-X project, based on the selected architecture: Option B - Flexible Hybrid Powerhouse. This architecture combines a robust on-premise OCR capability (using open-source engines, custom models, and DirectML) with the flexibility to integrate and utilize commercial cloud OCR APIs.
 
 ## 1. Core OCR Pipeline Components
 
@@ -35,32 +35,44 @@ This module is responsible for taking raw input (images, PDFs) and preparing it 
     *   **Input:** Raw image file path, image data from clipboard, or raw bytes. Configuration parameters for preprocessing steps.
     *   **Output:** A list/batch of processed images (e.g., binary NumPy arrays), optimized for the recognition module. Metadata about processing steps applied.
 
-### 1.2. Recognition Module (Ensemble Engine)
+### 1.2. Recognition & Abstraction Layer
 
-This module performs the core text recognition using an ensemble of OCR engines.
+This module is responsible for performing the core text recognition by dispatching requests to the appropriate OCR engine (local or cloud) via an abstraction layer, and then normalizing the results.
 
-*   **Sub-component: PaddleOCR Engine Integration:**
-    *   **Functionality:** Wrapper for PaddleOCR's PP-OCRv4 (or latest stable) detection and recognition models. Configured for high accuracy and optimized for English text.
-    *   **Technology:** `PaddlePaddle` (for model loading/conversion), `PaddleOCR` Python library, custom Python wrapper.
-*   **Sub-component: SVTR Engine Integration:**
-    *   **Functionality:** Wrapper for a Scene Text Recognition model like SVTR-Large (or similar robust transformer-based recognizer). This can be used as a primary recognizer for certain types of text or as a secondary engine in an ensemble to handle complex scripts or challenging fonts.
-    *   **Technology:** `PyTorch` or `TensorFlow` (for model loading/conversion), custom Python wrapper.
-*   **Sub-component: ONNX Conversion & DirectML Optimization:**
-    *   **Functionality:** Process and scripts for converting selected models (PaddleOCR, SVTR, preprocessing models like U-Net, DeepXY) from their native frameworks (PaddlePaddle, PyTorch, TensorFlow) to ONNX format. Configuration for inference using `ONNX Runtime` with the DirectML execution provider for GPU acceleration on Windows. Includes model quantization (e.g., to INT8) for further performance gains.
-    *   **Technology:** `ONNX`, `ONNX Runtime`, `tf2onnx`, `paddle2onnx`, `pytorch-onnx`.
-*   **Sub-component: Ensemble/Voting Logic:**
-    *   **Functionality:** Implements strategies for combining results if multiple OCR engines are used concurrently on the same text region:
-        *   Confidence-based weighting: Average or prioritize results based on confidence scores from each engine.
-        *   Primary/Secondary: Use one engine as primary and another for regions where the primary fails or has low confidence.
-        *   Rule-based selection: e.g., use SVTR for lines detected to contain specific challenging characteristics.
+*   **Sub-component: OCR Engine Abstraction Layer:**
+    *   **Functionality:** Acts as a central routing point for OCR requests. It receives processed images and configuration from the `OCR Workflow Orchestrator`, selects the appropriate OCR engine (local ensemble or a specific cloud service client) based on this configuration, invokes the chosen engine, and normalizes its output into a standardized format.
     *   **Technology:** Custom Python logic.
-*   **Interface (Recognition Module):**
-    *   **Input:** Batch of processed images (binary NumPy arrays) from the Preprocessing Module.
-    *   **Output:** Structured data containing:
+    *   **Inputs:** Processed image data, configuration specifying engine choice (e.g., "local", "google", "azure") and any engine-specific parameters (e.g., API keys if managed here, language hints).
+    *   **Outputs:** Standardized OCR data structure (text, bounding boxes, confidence scores).
+
+*   **Sub-component: Local OCR Engine Ensemble:**
+    *   **Functionality:** Manages and executes the locally installed OCR engines. This includes:
+        *   **PaddleOCR Engine Integration:** Wrapper for PaddleOCR's PP-OCRv4 (or latest stable) detection and recognition models. Configured for high accuracy and optimized for English text. (Technology: `PaddlePaddle`, `PaddleOCR` Python library).
+        *   **SVTR Engine Integration:** Wrapper for a Scene Text Recognition model like SVTR-Large. (Technology: `PyTorch` or `TensorFlow` for model, custom Python wrapper).
+        *   **Local Ensemble/Voting Logic:** Implements strategies for combining results if multiple local OCR engines are used concurrently (e.g., confidence-based weighting, primary/secondary). (Technology: Custom Python logic).
+    *   **Technology:** As listed above; all local models are intended to be run via ONNX Runtime with DirectML.
+    *   **Inputs:** Processed image data from the Abstraction Layer.
+    *   **Outputs:** Raw OCR data in the native format of the local engine(s) to the Abstraction Layer.
+
+*   **Sub-component: Cloud OCR Service Clients (Google & Azure):**
+    *   **Functionality:** Individual clients responsible for interacting with specific commercial cloud OCR APIs.
+        *   **Google Document AI Client:** Handles authentication, request formatting, API calls to Google Document AI, and parsing of its responses. (Technology: `google-cloud-documentai` Python library).
+        *   **Azure AI Vision Client:** Handles authentication, request formatting, API calls to Azure AI Vision (Read API or Document Intelligence), and parsing of its responses. (Technology: `azure-ai-vision-imageanalysis` or `azure-ai-formrecognizer` Python library).
+    *   **Technology:** As listed above, Python SDKs provided by Google and Microsoft.
+    *   **Inputs:** Processed image data and API credentials/configuration from the Abstraction Layer.
+    *   **Outputs:** Raw OCR data in the native format of the respective cloud API to the Abstraction Layer.
+
+*   **Sub-component: ONNX Conversion & DirectML Optimization (for Local Engines):**
+    *   **Functionality:** Process and scripts for converting local models (PaddleOCR, SVTR, preprocessing models like U-Net, DeepXY) to ONNX format. Configuration for inference using `ONNX Runtime` with the DirectML execution provider for GPU acceleration on Windows. Includes model quantization.
+    *   **Technology:** `ONNX`, `ONNX Runtime`, `tf2onnx`, `paddle2onnx`, `pytorch-onnx`.
+
+*   **Interface (OCR Engine Abstraction Layer):**
+    *   **Input:** Batch of processed images (binary NumPy arrays) from the Preprocessing Module. Configuration object specifying which engine to use (local, Google, Azure) and any necessary credentials or engine-specific parameters.
+    *   **Output:** Standardized structured data containing:
         *   Recognized text strings.
         *   Confidence scores (per character, word, or line).
         *   Bounding box coordinates (for words, lines, or characters).
-        *   Information about which engine produced the result (if ensemble).
+        *   Information about which engine (local type or cloud provider) produced the result.
 
 ### 1.3. Post-Processing Module
 
@@ -84,7 +96,7 @@ This module refines the raw OCR output and prepares it for the user.
         *   Searchable PDF (overlaying invisible text layer onto original image/PDF).
     *   **Technology:** Python string manipulation, `json` library, `reportlab` or `PyMuPDF` for PDF generation.
 *   **Interface (Post-Processing Module):**
-    *   **Input:** OCR data from the Recognition Module (text, confidence, coordinates). Configuration for output formats.
+    *   **Input:** Standardized OCR data (text, confidence, coordinates) from the **OCR Engine Abstraction Layer**. Configuration for output formats.
     *   **Output:** Final OCR results in the desired user format(s).
 
 ## 2. Application & Utility Components
@@ -147,11 +159,19 @@ Framework for managing and updating the OCR models.
 ```mermaid
 graph TD
     A[Input File/Clipboard Data] --> B(Input Handling & Preprocessing Module);
-    B -- Processed Image Data --> C(Recognition Module - Ensemble Engine);
-    C -- Raw OCR Data (Text, Coords, Confidences) --> D(Post-Processing Module);
+    B -- Processed Image Data --> AbsL(OCR Engine Abstraction Layer);
+    subgraph "Recognition Path Selection"
+        direction LR
+        AbsL -- Route to Local --> LocalRM[Local OCR Engine Ensemble];
+        AbsL -- Route to Cloud --> CloudC[Cloud OCR Service Clients];
+    end
+    LocalRM -- Local OCR Data --> AbsL;
+    CloudC -- Cloud OCR Data --> AbsL;
+    AbsL -- Standardized OCR Data --> D(Post-Processing Module);
     D -- Final Formatted Text/Searchable PDF --> E(Windows Client Application - UI Display/Save);
+
     F[User Settings/Configuration] --> B;
-    F --> C;
+    F -- Engine Choice, API Keys --> AbsL;
     F --> D;
     F --> E;
 ```
@@ -186,8 +206,10 @@ graph TD
     *   `PaddlePaddle`: For PaddleOCR model loading/conversion.
     *   `PaddleOCR`: Python library for direct use or custom wrapping.
     *   `PyTorch` or `TensorFlow`: (For SVTR model loading/conversion, runtime dependency is ONNX).
-    *   `ONNXRuntime-DirectML`: Core inference engine for all models.
+    *   `ONNXRuntime-DirectML`: Core inference engine for all local models.
     *   `NumPy`: Data handling.
+    *   `google-cloud-documentai`: Google Cloud Document AI client library.
+    *   `azure-ai-vision-imageanalysis` or `azure-ai-formrecognizer`: Azure AI Vision client library.
 *   **Post-Processing Module:**
     *   `HuggingFace Transformers`: For ByT5 model.
     *   `PyTorch` or `TensorFlow`: (For ByT5, runtime dependency is ONNX).

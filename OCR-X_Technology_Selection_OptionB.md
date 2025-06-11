@@ -1,6 +1,6 @@
-# OCR-X Project: Technology Selection (Option B - On-Premise Powerhouse)
+# OCR-X Project: Technology Selection (Option B - Flexible Hybrid Powerhouse)
 
-This document details the specific technology selections for each component and sub-component of the OCR-X project, based on the chosen architecture: Option B - On-Premise Powerhouse.
+This document details the specific technology selections for each component and sub-component of the OCR-X project, based on the chosen architecture: Option B - Flexible Hybrid Powerhouse. This architecture integrates robust local processing capabilities with the option to use commercial cloud OCR services.
 
 ## 1. Core OCR Pipeline Components
 
@@ -73,39 +73,58 @@ This document details the specific technology selections for each component and 
     *   **Exact Version:** PyWavelets 1.5.0
     *   **Justification:** Standard library for wavelet transforms in Python, useful for advanced denoising or feature extraction.
 
-### 1.2. Recognition Module (Ensemble Engine)
+### 1.2. Recognition & Abstraction Layer
 
-*   **Sub-component: PaddleOCR Engine Integration**
-    *   **Primary Technology:** PaddleOCR Python library (for PP-OCRv4 models)
-    *   **Exact Version:** PaddleOCR 2.7.3, PaddlePaddle 2.6.0
-    *   **Alternative Options:** Direct ONNX inference of PaddleOCR models if pre-converted (reduces direct PaddlePaddle dependency at runtime).
-    *   **Justification:** Official library for SOTA PP-OCR models. Provides tools for model download and basic usage. Models will be converted to ONNX for final deployment.
-    *   **Key Dependencies:** PaddlePaddle (for initial model handling/conversion).
+*   **Sub-component: OCR Engine Abstraction Layer**
+    *   **Primary Technology:** Python
+    *   **Exact Version:** Python 3.9.13+
+    *   **Justification:** Custom logic implemented in Python for managing engine selection, request routing, and output normalization. Provides flexibility and seamless integration with other Python components.
+    *   **Key Dependencies:** NumPy 1.26.2 (for standardized data structures).
 
-*   **Sub-component: SVTR Engine Integration**
-    *   **Primary Technology (Model Source):** PyTorch (for SVTR-Large or similar model implementation)
-    *   **Exact Version:** PyTorch 2.1.2
-    *   **Alternative Options:** TensorFlow (if a suitable SVTR implementation exists and is preferred).
-    *   **Justification:** Many SOTA text recognition models, including SVTR variants, have reference implementations in PyTorch. Models will be converted to ONNX.
-    *   **Key Dependencies (Model Handling/Conversion):** Python 3.9+.
+*   **Sub-component: Local OCR Engine Ensemble**
+    *   **PaddleOCR Engine Integration:**
+        *   **Primary Technology:** PaddleOCR Python library (for PP-OCRv4 models)
+        *   **Exact Version:** PaddleOCR 2.7.3, PaddlePaddle 2.6.0
+        *   **Justification:** Official library for SOTA PP-OCR models. Models converted to ONNX for deployment.
+        *   **Key Dependencies:** PaddlePaddle (for model handling/conversion).
+    *   **SVTR Engine Integration:**
+        *   **Primary Technology (Model Source):** PyTorch (for SVTR-Large or similar)
+        *   **Exact Version:** PyTorch 2.1.2
+        *   **Justification:** Many SOTA text recognition models like SVTR have PyTorch implementations. Models converted to ONNX.
+        *   **Key Dependencies (Model Handling/Conversion):** Python 3.9+.
+    *   **Local Ensemble/Voting Logic:**
+        *   **Primary Technology:** Python
+        *   **Exact Version:** Python 3.9.13+
+        *   **Justification:** Custom Python logic for combining results from local engines.
+        *   **Key Dependencies:** NumPy 1.26.2.
 
-*   **Sub-component: ONNX Conversion & DirectML Optimization**
+*   **Sub-component: Cloud OCR Service Clients**
+    *   **Google Document AI Client:**
+        *   **Primary Technology:** `google-cloud-documentai` Python library
+        *   **Exact Version:** `google-cloud-documentai` 2.20.0 (or latest stable)
+        *   **Justification:** Official Google Cloud client library for Python, provides convenient access to Document AI features.
+        *   **Key Dependencies:** `googleapis-common-protos`, `google-auth`.
+    *   **Azure AI Vision Client:**
+        *   **Primary Technology:** `azure-ai-vision-imageanalysis` (for Read API) or `azure-ai-formrecognizer` (for Document Intelligence) Python library
+        *   **Exact Version:** `azure-ai-vision-imageanalysis` 1.0.0b1 (or latest stable for Read), `azure-ai-formrecognizer` 3.3.2 (or latest stable)
+        *   **Justification:** Official Microsoft Azure SDKs for Python, providing access to Azure's vision and form recognizer services. Selection depends on specific Azure API chosen (general Read vs. layout/model-based Document Intelligence).
+        *   **Key Dependencies:** `azure-core`, `msrest`.
+    *   **Authentication Technologies (for Cloud Services):**
+        *   **Google Cloud:** OAuth 2.0 (typically via service account JSON keys). Managed by `google-auth` library.
+        *   **Azure:** Azure Active Directory token-based authentication or API Key. Managed by `azure-identity` and specific service client libraries.
+        *   **Justification:** Standard, secure authentication mechanisms provided by the cloud vendors and supported by their SDKs.
+
+*   **Sub-component: ONNX Conversion & DirectML Optimization (for Local Engines)**
     *   **Primary Technology:** ONNX
     *   **Exact Version:** ONNX 1.15.0
-    *   **Justification:** Standard format for model interoperability, target for DirectML deployment.
+    *   **Justification:** Standard format for model interoperability, target for DirectML deployment of *local* models.
 
     *   **Primary Technology:** ONNX Runtime
     *   **Exact Version:** ONNX Runtime 1.16.3 (with DirectML execution provider)
-    *   **Justification:** High-performance inference engine for ONNX models with DirectML support.
+    *   **Justification:** High-performance inference engine for ONNX models with DirectML support, for *local* model execution.
 
-    *   **Primary Technology (Conversion tools):** `tf2onnx` 1.15.1, `paddle2onnx` 1.1.0, `pytorch-onnx` (usually part of PyTorch core via `torch.onnx.export`).
-    *   **Justification:** Official or widely used tools for converting models from their native frameworks to ONNX.
-
-*   **Sub-component: Ensemble/Voting Logic**
-    *   **Primary Technology:** Python
-    *   **Exact Version:** Python 3.9.13 (or later 3.9.x / 3.10.x / 3.11.x)
-    *   **Justification:** Custom logic implemented in Python for flexibility and ease of integration with other Python-based components.
-    *   **Key Dependencies:** NumPy 1.26.2 (for numerical operations on confidence scores, etc.).
+    *   **Primary Technology (Conversion tools):** `tf2onnx` 1.15.1, `paddle2onnx` 1.1.0, `pytorch-onnx` (PyTorch core).
+    *   **Justification:** Tools for converting *local* models from their native frameworks to ONNX.
 
 ### 1.3. Post-Processing Module
 
@@ -155,8 +174,9 @@ This document details the specific technology selections for each component and 
 *   **Sub-component: Configuration Manager**
     *   **Primary Technology:** Python `configparser` or `json`
     *   **Exact Version:** Python 3.9.13+ (part of standard library)
-    *   **Alternative Options:** `PyYAML` (for YAML config files, more human-readable for complex configs).
-    *   **Justification:** Standard Python libraries are sufficient and easy to use for managing application settings.
+    *   **Alternative Options:** `PyYAML` (for YAML config files, more human-readable for complex configs). Python `keyring` library (for secure credential storage).
+    *   **Justification:** Standard Python libraries for general settings. `keyring` provides a cross-platform way to interact with system credential managers (like Windows Credential Manager) for securely storing API keys.
+    *   **Key Dependencies:** `keyring` (if used for API keys).
 
 ### 2.2. Synthetic Data Generation Pipeline
 
