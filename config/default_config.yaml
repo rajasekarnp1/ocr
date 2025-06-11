@@ -1,0 +1,17 @@
+# Default configuration settings for the project
+
+# Example:
+# data:
+#   input_path: "data/raw/"
+#   processed_path: "data/processed/"
+#
+# model:
+#   name: "MyModel"
+#   version: "1.0"
+#   hyperparameters:
+#     learning_rate: 0.001
+#     batch_size: 32
+#
+# logging:
+#   level: "INFO"
+#   format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"

@@ -1,0 +1,36 @@
+# Ignore Python cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Ignore virtual environment directories
+venv/
+env/
+.venv/
+.env/
+
+# Ignore IDE and editor specific files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Ignore build artifacts
+build/
+dist/
+*.egg-info/
+
+# Ignore data files (if large or sensitive)
+# data/
+
+# Ignore notebook checkpoints
+.ipynb_checkpoints/
+
+# Ignore sensitive configuration files (e.g., API keys)
+config/secrets.yaml
+*.env
+
+# Ignore OS-specific files
+.DS_Store
+Thumbs.db
