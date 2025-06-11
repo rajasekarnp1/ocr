@@ -26,22 +26,22 @@ class OCRWorkflowOrchestrator:
         self.logger = logging.getLogger(__name__)
         try:
             # self.config = load_config(config_path) # More robust config loading
-            self.config = {'preprocessing_settings': {'model_path': 'path/to/geom_model.onnx'}, 
+            self.config = {'preprocessing_settings': {'model_path': 'path/to/geom_model.onnx'},
                            'recognition_settings': {'model_path': 'path/to/ocr_model.onnx', 'use_directml': True},
                            'postprocessing_settings': {'nlp_model_path': 'path/to/nlp_model.onnx'},
                            'logging': {'level': 'INFO'}} # Placeholder config
-            
+
             # Configure logging based on loaded config (config_loader would ideally handle this)
             log_level = self.config.get('logging', {}).get('level', 'INFO').upper()
             self.logger.setLevel(getattr(logging, log_level, logging.INFO))
 
             self.logger.info("Initializing OCR Workflow Orchestrator...")
-            
+
             # Conceptual initialization of modules
             # self.preprocessor = PreprocessingModule(self.config.get('preprocessing_settings', {}))
             # self.recognizer = RecognitionModule(self.config.get('recognition_settings', {}))
             # self.postprocessor = PostprocessingModule(self.config.get('postprocessing_settings', {}))
-            
+
             # Placeholder initializations
             self.preprocessor = PreprocessingModulePlaceholder(self.config.get('preprocessing_settings', {}))
             self.recognizer = RecognitionModulePlaceholder(self.config.get('recognition_settings', {}))
@@ -64,7 +64,7 @@ class OCRWorkflowOrchestrator:
         if not os.path.exists(image_path): # Basic check
              self.logger.error(f"Image file not found: {image_path}")
              raise FileNotFoundError(f"Image file not found: {image_path}")
-        
+
         # Actual image loading (e.g., with Pillow: from PIL import Image; img = Image.open(image_path))
         # For now, returning a placeholder
         self.logger.info(f"Image loaded successfully from {image_path}")
@@ -81,7 +81,7 @@ class OCRWorkflowOrchestrator:
             if image_data is None:
                 # load_image should raise error, but as a safeguard:
                 self.logger.error(f"Image loading failed for {image_path}, aborting process.")
-                return None 
+                return None
 
             # 2. Preprocess Image
             self.logger.debug(f"Preprocessing image: {image_path}")
@@ -103,7 +103,7 @@ class OCRWorkflowOrchestrator:
             if final_text_results is None:
                 self.logger.error(f"Post-processing failed for {image_path}, aborting process.")
                 return None
-            
+
             self.logger.info(f"Successfully processed document: {image_path}")
             return final_text_results
 
@@ -147,7 +147,7 @@ if __name__ == '__main__':
     # Example Usage (conceptual)
     # Configure logging (ideally done via config file loading)
     logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    
+
     # Create a dummy config file for testing this script
     if not os.path.exists("config_dev.yaml"):
         with open("config_dev.yaml", "w") as f:
@@ -203,13 +203,13 @@ class GeometricCorrector:
         if not model_path or not isinstance(model_path, str):
             self.logger.error("Invalid model path provided for GeometricCorrector.")
             raise ValueError("Model path must be a non-empty string.")
-        
+
         try:
             self.logger.info(f"Attempting to load geometric correction model from: {model_path}")
             if not os.path.exists(model_path):
                  self.logger.error(f"Geometric correction model file not found: {model_path}")
                  raise FileNotFoundError(f"Geometric correction model file not found: {model_path}")
-            
+
             # self.session = ort.InferenceSession(self.model_path, providers=onnx_providers) # Actual ONNX loading
             self.session = lambda image_data_np: image_data_np * 0.95 # Placeholder model behavior
             self.logger.info(f"Geometric correction model loaded successfully from {self.model_path} using providers: {onnx_providers}")
@@ -225,7 +225,7 @@ class GeometricCorrector:
         if image_data_np is None:
             self.logger.warning("Input image_data_np is None for geometric correction. Skipping.")
             return None
-        
+
         # Basic type/shape validation (conceptual)
         # if not isinstance(image_data_np, np.ndarray):
         #     self.logger.error("Invalid data type for geometric correction. Expected NumPy array.")
@@ -234,7 +234,7 @@ class GeometricCorrector:
         #     self.logger.warning(f"Unexpected image dimensions: {image_data_np.ndim}. May not process correctly.")
 
         self.logger.debug(f"Applying geometric correction to image of shape: {getattr(image_data_np, 'shape', 'N/A')}")
-        
+
         try:
             # Placeholder for actual model prediction
             # input_name = self.session.get_inputs()[0].name
@@ -242,9 +242,9 @@ class GeometricCorrector:
             # onnx_input = {input_name: preprocessed_for_model}
             # corrected_image_np = self.session.run(None, onnx_input)[0]
             # result_image = self._postprocess_from_model(corrected_image_np) # Model-specific postprocessing
-            
+
             # Using placeholder model
-            result_image = self.session(image_data_np) 
+            result_image = self.session(image_data_np)
             self.logger.info("Geometric correction applied successfully.")
             return result_image
         except Exception as e:
@@ -256,7 +256,7 @@ class GeometricCorrector:
         # Placeholder: Convert to expected format, e.g., float32, specific channel order, normalization
         self.logger.debug("Preprocessing image for geometric correction model...")
         # return np.expand_dims(image_data_np.astype(np.float32) / 255.0, axis=0) # Example
-        return image_data_np 
+        return image_data_np
 
     def _postprocess_from_model(self, model_output_np):
         # Placeholder: Convert model output back to standard image format
@@ -305,7 +305,7 @@ class ONNXRecognizer:
         self.logger = logging.getLogger(__name__)
         self.model_path = model_path
         self.session = None
-        
+
         if not model_path or not isinstance(model_path, str):
             self.logger.error("Invalid model path provided for ONNXRecognizer.")
             raise ValueError("Model path must be a non-empty string.")
@@ -325,10 +325,10 @@ class ONNXRecognizer:
             # sess_options = ort.SessionOptions()
             # sess_options.log_severity_level = 3 # Default is 2 (Warning), 3 is Error
             # self.session = ort.InferenceSession(self.model_path, sess_options=sess_options, providers=providers)
-            
+
             # Placeholder session
             self.session = lambda processed_image_np: (f"Raw OCR from {os.path.basename(model_path)} for image of shape {getattr(processed_image_np, 'shape', 'N/A')}", 0.92)
-            
+
             # Verify which provider is being used (conceptual, actual check is more involved)
             # current_provider = self.session.get_providers()[0] # This is conceptual for the placeholder
             current_provider = "DmlExecutionProvider" if use_directml else "CPUExecutionProvider" # Placeholder
@@ -368,7 +368,7 @@ class ONNXRecognizer:
         # decoded_text = ctc_decode_with_dictionary(text_sequence, self.char_map)
         # overall_confidence = np.mean(confidence_scores)
         # return decoded_text, overall_confidence
-        
+
         # Using placeholder output directly
         if isinstance(model_output, tuple) and len(model_output) == 2:
             return model_output[0], model_output[1]
@@ -381,12 +381,12 @@ class ONNXRecognizer:
         if processed_image_np is None:
             self.logger.warning("Input image_data_np is None for ONNX recognition. Skipping.")
             return None, 0.0
-        
+
         self.logger.debug(f"Performing recognition on image of shape: {getattr(processed_image_np, 'shape', 'N/A')}")
         try:
             # input_feed = {self.session.get_inputs()[0].name: self._prepare_input(processed_image_np)}
             # raw_output_tensors = self.session.run(None, input_feed) # Actual ONNX inference
-            
+
             # Using placeholder model directly
             raw_output_tensors = self.session(processed_image_np)
 
@@ -403,7 +403,7 @@ if __name__ == '__main__':
     dummy_ocr_model_path = "dummy_ocr_model.onnx"
     if not os.path.exists(dummy_ocr_model_path):
         with open(dummy_ocr_model_path, "w") as f: f.write("dummy onnx ocr model data")
-    
+
     try:
         recognizer = ONNXRecognizer(model_path=dummy_ocr_model_path, use_directml=True)
         # mock_preprocessed_image = np.random.rand(32, 100, 3).astype(np.float32) # Conceptual NumPy image
@@ -446,7 +446,7 @@ DEFAULT_LOGGING_CONFIG = {
         #     'class': 'logging.FileHandler',
         #     'formatter': 'standard',
         #     'filename': 'ocrx_app.log',
-        #     'level': 'DEBUG', 
+        #     'level': 'DEBUG',
         # }
     },
     'root': { # Root logger
@@ -500,7 +500,7 @@ def load_config(config_path="config.yaml"):
         # Setup logging using the configuration from the file
         logging_config_from_file = config_data.get('logging', DEFAULT_LOGGING_CONFIG)
         logging.config.dictConfig(logging_config_from_file)
-        
+
         logging.info(f"Configuration loaded and logging configured from '{config_path}'.")
         return config_data
 
@@ -581,7 +581,7 @@ logging:
             main_logger.info(f"App version from config: {config.get('app_settings', {}).get('version')}")
             main_logger.debug("This is a debug message from the main example script.")
             main_logger.warning("This is a warning message.")
-            
+
             # Example of how another module might use logging
             # (assuming logging was configured by load_config)
             test_module_logger = logging.getLogger("MyTestModule")

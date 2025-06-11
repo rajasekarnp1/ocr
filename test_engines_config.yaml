@@ -1,0 +1,63 @@
+# Comprehensive Test Configuration for OCR Workflow Orchestrator Integration
+
+app_settings:
+  default_ocr_engine: "local_paddle_ocr" # Can be changed to test different defaults
+
+ocr_engines:
+  local_paddle_ocr:
+    enabled: true
+    module: "ocr_components.local_ocr_engine"
+    class: "LocalOCREngine"
+    name: "PaddleOCR ONNX (Test)" # Name for this test instance
+    config:
+      use_gpu_directml: false # Default to CPU for broader testability without DirectML setup
+      detection_model_path: "models_test/dummy_det.onnx"
+      recognition_model_path: "models_test/dummy_rec.onnx"
+      character_dict_path: "models_test/dummy_chars.txt"
+      # Using smaller, more manageable default sizes for testing structure
+      det_input_size: [320, 320]
+      det_mean: [0.485, 0.456, 0.406]
+      det_std: [0.229, 0.224, 0.225]
+      det_db_thresh: 0.3
+      det_db_box_thresh: 0.5 # Adjusted from 0.6 for testing
+      det_db_unclip_ratio: 1.5
+      det_max_candidates: 200 # Reduced for testing
+      det_min_box_size: 2
+      rec_image_shape: [1, 32, 100] # C, H, W (Grayscale, 32 height, max 100 width for test)
+      rec_batch_size: 2
+      rec_norm_mean: 0.5
+      rec_norm_std: 0.5
+
+  google_cloud_vision:
+    enabled: true
+    module: "ocr_components.google_ocr_engine"
+    class: "GoogleCloudOCREngine"
+    name: "Google Cloud Vision API (Test)"
+    config:
+      # IMPORTANT: User needs to provide this path locally or set GOOGLE_TEST_API_KEY_PATH environment variable
+      api_key_path: "path/to/your/service_account_key.json"
+      default_language_hints: ["en"]
+
+logging:
+  version: 1
+  disable_existing_loggers: false
+  formatters:
+    default:
+      format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+  handlers:
+    console:
+      class: logging.StreamHandler
+      level: INFO # Can be set to DEBUG for more verbose output
+      formatter: default
+      stream: ext://sys.stdout
+  root:
+    level: INFO # Root logger level
+    handlers: [console]
+  loggers: # Fine-tune log levels for specific components if needed
+    ocr_components:
+      level: DEBUG # More detail from our components
+      propagate: true
+    ocr_workflow_orchestrator:
+      level: DEBUG
+      propagate: true
+```

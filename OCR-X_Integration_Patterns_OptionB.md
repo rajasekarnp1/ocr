@@ -28,7 +28,7 @@ sequenceDiagram
     Orch->>PreP: ProcessInput(Input Data, Config.PreP)
     Note right of PreP: Executes internal chain (Acquisition, Conversion, Binarization, Geometry, Noise Reduction)
     PreP-->>Orch: ProcessedImagesBatch
-    
+
     Orch->>RecM: RecognizeText(ProcessedImagesBatch, Config.RecM)
     Note right of RecM: Manages ONNX Runtime, DirectML, Ensemble (PaddleOCR, SVTR)
     RecM-->>Orch: RawOCRData (Text, Coords, Confidences)
@@ -38,7 +38,7 @@ sequenceDiagram
     PostP-->>Orch: FinalOutput (Formatted Text/PDF Path)
 
     Orch-->>UI: DisplayResults/SaveFile(FinalOutput)
-    
+
     %% Progress Updates (simplified)
     PreP-->>Orch: ProgressUpdate("Preprocessing: 50%")
     Orch-->>UI: UpdateProgress("Preprocessing: 50%")

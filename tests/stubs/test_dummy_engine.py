@@ -103,10 +103,10 @@ def test_dummy_engine_initialize_success(dummy_engine_instance: DummyLocalEngine
         dummy_engine_instance.initialize()
 
     assert dummy_engine_instance._is_initialized, "Engine should be initialized after calling initialize()"
-    
+
     # Check logger calls on the mock_logger (if not using caplog for this specific check)
     # Example: mock_logger.info.assert_any_call(f"DummyLocalEngine '{dummy_engine_instance.get_engine_name()}' initialized. Model path: {dummy_engine_instance.model_path}")
-    
+
     # Check caplog for the specific message
     expected_log_message = f"DummyLocalEngine '{dummy_engine_instance.get_engine_name()}' initialized. Model path: {dummy_engine_instance.model_path}"
     assert any(expected_log_message in record.message for record in caplog.records if record.levelname == "INFO")
@@ -132,7 +132,7 @@ def test_dummy_engine_is_available(dummy_engine_instance: DummyLocalEngine):
     2. Then, call `initialize()` on the instance. Assert `is_available()` now returns `True`.
     """
     assert not dummy_engine_instance.is_available(), "Engine should not be available before initialization"
-    
+
     dummy_engine_instance.initialize()
     assert dummy_engine_instance.is_available(), "Engine should be available after successful initialization"
 
@@ -141,7 +141,7 @@ def test_dummy_engine_recognize_before_init(dummy_engine_instance: DummyLocalEng
     caplog.set_level(logging.ERROR)
     with pytest.raises(RuntimeError, match=f"Engine {dummy_engine_instance.get_engine_name()} not initialized."):
         dummy_engine_instance.recognize("dummy_image_data.png")
-    
+
     assert any(f"{dummy_engine_instance.get_engine_name()} called before initialization." in record.message for record in caplog.records if record.levelname == "ERROR")
 
 
@@ -155,7 +155,7 @@ def test_dummy_engine_recognize_success(dummy_engine_instance_initialized: Dummy
     """
     image_path_data = "dummy_image_data.png"
     language_hint_data = "eng-US"
-    
+
     with caplog.at_level(logging.INFO):
         result = dummy_engine_instance_initialized.recognize(image_path_data, language_hint=language_hint_data)
 

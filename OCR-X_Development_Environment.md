@@ -109,13 +109,13 @@ For consistent testing, component isolation during development, and potentially 
 
     # Environment variables (example)
     ENV PYTHONPATH=/app
-    ENV OCRX_MODEL_PATH=/app/models 
+    ENV OCRX_MODEL_PATH=/app/models
     # (Models would need to be ADDed or mounted in a real scenario)
 
     # Default command (e.g., for running tests)
-    # CMD ["pytest", "tests/"] 
+    # CMD ["pytest", "tests/"]
     # Or an entrypoint script for more complex startup
-    ENTRYPOINT ["/app/docker-entrypoint.sh"] 
+    ENTRYPOINT ["/app/docker-entrypoint.sh"]
     # Example: docker-entrypoint.sh could run tests or a specific component
     ```
 
@@ -184,13 +184,13 @@ Automated pipeline for building, testing, and potentially deploying OCR-X.
           - name: Install Poetry (or pip for requirements.txt)
             run: |
               python -m pip install --upgrade pip
-              pip install poetry 
+              pip install poetry
               # Or: pip install -r requirements.txt
 
           - name: Configure Poetry and Install Dependencies
             run: |
               poetry config virtualenvs.in-project true
-              poetry install --no-root --with dev 
+              poetry install --no-root --with dev
               # Or: pip install -r requirements.txt (if not using Poetry)
             # Caching dependencies can be added here for pip or Poetry
 
@@ -210,7 +210,7 @@ Automated pipeline for building, testing, and potentially deploying OCR-X.
           # - name: Check DirectML
           #   run: |
           #     # Script to test onnxruntime-directml basic functionality
-          #     python -c "import onnxruntime as rt; print(rt.get_available_providers())" 
+          #     python -c "import onnxruntime as rt; print(rt.get_available_providers())"
           #     # This will list 'DmlExecutionProvider' if available
 
           - name: Run Integration Tests (CPU fallback if no DirectML in CI)
@@ -221,7 +221,7 @@ Automated pipeline for building, testing, and potentially deploying OCR-X.
           - name: Run OCR Accuracy Benchmark (CPU fallback)
             env:
                 # Ensure tests run with CPU provider if DirectML is not reliably available in CI
-                ONNXRUNTIME_PREFERRED_PROVIDERS: 'CPUExecutionProvider' 
+                ONNXRUNTIME_PREFERRED_PROVIDERS: 'CPUExecutionProvider'
             run: |
               poetry run python scripts/run_benchmark.py --dataset data/benchmark_small --output results/benchmark_ci
               poetry run python scripts/calculate_accuracy.py --pred results/benchmark_ci --gt data/benchmark_small/groundtruth.json --cer-threshold 3.0 --wer-threshold 7.0

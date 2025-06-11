@@ -104,9 +104,9 @@ This document outlines the Infrastructure as Code (IaC) strategy for the OCR-X p
 
               # Provision with PowerShell
               config.vm.provision "shell", path: "scripts/provision_staging_vm.ps1", args: "-PythonVersion 3.9.13"
-              
+
               # Or provision with DSC
-              # config.vm.provision "dsc", configuration_file: "DscConfigurations/StagingOCRNode.ps1", 
+              # config.vm.provision "dsc", configuration_file: "DscConfigurations/StagingOCRNode.ps1",
               #   configuration_name: "StagingOCRNode", module_path: "DscModules"
             end
             ```
@@ -164,15 +164,15 @@ This document outlines the Infrastructure as Code (IaC) strategy for the OCR-X p
 
         # 1. Update Manifest (example: version number)
         # (Get-Content $ManifestPath) -replace '<Identity Name=".*?" Publisher=".*?" Version=".*?" />', "<Identity Name=`"$PackageName`" Publisher=`"$PublisherName`" Version=`"$Version`" />" | Set-Content $ManifestPath
-        
+
         # 2. Create Package using MakeAppx.exe
         # $makeAppxPath = "C:\Program Files (x86)\Windows Kits\10\bin\10.0.22621.0\x64\makeappx.exe" # Adjust path
         # & $makeAppxPath pack /d "$SourceDir" /p "$OutputPackagePath" /o /l # /o for overwrite, /l for localization if needed
-        
+
         # 3. Sign Package using SignTool.exe
         # $signToolPath = "C:\Program Files (x86)\Windows Kits\10\bin\10.0.22621.0\x64\signtool.exe" # Adjust path
         # & $signToolPath sign /fd SHA256 /a /f "$CertificatePath" /p "$CertificatePassword" "$OutputPackagePath"
-        
+
         Write-Host "MSIX Packaging script placeholder for $OutputPackagePath completed."
         # Actual script would involve more robust error handling and path management.
         # Tools like msbuild with a .wapproj (Windows Application Packaging Project) can also automate this.

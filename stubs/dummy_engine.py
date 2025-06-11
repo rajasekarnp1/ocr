@@ -27,9 +27,9 @@ class DummyLocalEngine(OCREngine):
         if not self._is_initialized:
             self.logger.error(f"{self.get_engine_name()} called before initialization.")
             raise RuntimeError(f"Engine {self.get_engine_name()} not initialized.")
-        
+
         self.logger.info(f"DummyLocalEngine recognizing image (type: {type(image_data)}). Language hint: {language_hint}")
-        
+
         # Simulate some processing based on image_data type if needed
         image_info = "simulated_image_processed"
         if isinstance(image_data, str): # if it's a path
@@ -40,7 +40,7 @@ class DummyLocalEngine(OCREngine):
             "text": f"Dummy OCR result from {self.get_engine_name()} for {image_info}",
             "confidence": 0.99,
             "segments": [{
-                "text": "Dummy segment", 
+                "text": "Dummy segment",
                 "bounding_box": [0,0,10,10], # x1, y1, x2, y2
                 "confidence": 0.99
             }],

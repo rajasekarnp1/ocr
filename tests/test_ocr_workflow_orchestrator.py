@@ -69,7 +69,7 @@ def basic_app_config_dict() -> dict:
             }
         },
         # Include a basic logging config to prevent errors if not overridden by specific tests
-        "logging": DEFAULT_LOGGING_CONFIG 
+        "logging": DEFAULT_LOGGING_CONFIG
     }
 
 @pytest.fixture
@@ -85,7 +85,7 @@ def orchestrator(temp_config_file, monkeypatch) -> OCRWorkflowOrchestrator:
     """Fixture to get an initialized OCRWorkflowOrchestrator instance."""
     # Ensure the stubs directory is in path for engine loading
     monkeypatch.syspath_prepend(stubs_path) # Ensure stubs/ is discoverable
-    
+
     # Patch load_image to prevent actual file operations unless specifically tested
     with patch.object(OCRWorkflowOrchestrator, 'load_image', return_value=np.zeros((10,10,3), dtype=np.uint8)) as _:
         orch = OCRWorkflowOrchestrator(config_path=temp_config_file)
@@ -101,7 +101,7 @@ def orchestrator_with_dummy_engine(temp_config_file, monkeypatch) -> OCRWorkflow
     # Patch load_image to prevent actual file operations unless specifically tested
     with patch.object(OCRWorkflowOrchestrator, 'load_image', return_value=np.zeros((10,10,3), dtype=np.uint8)) as _:
         orch = OCRWorkflowOrchestrator(config_path=temp_config_file)
-    
+
     # Check if the engine was loaded, if not, something is wrong with the test setup
     assert "dummy_engine_1" in orch.engine_manager.get_available_engines(), \
         "Setup Error: dummy_engine_1 not loaded in orchestrator_with_dummy_engine fixture."
@@ -112,7 +112,7 @@ def orchestrator_no_engines(tmp_path, monkeypatch, basic_app_config_dict) -> OCR
     """Fixture for an orchestrator where no engines are configured/enabled."""
     empty_engine_config = basic_app_config_dict.copy()
     empty_engine_config["ocr_engines"] = {} # No engines defined
-    
+
     config_file_path = tmp_path / "no_engines_config.yaml"
     with open(config_file_path, "w", encoding="utf-8") as f:
         yaml.dump(empty_engine_config, f)
@@ -136,7 +136,7 @@ def test_engine_manager_init(basic_app_config_dict, mock_logger):
 def test_discover_and_load_engines_success(basic_app_config_dict, mock_logger, monkeypatch):
     """Test successful discovery and loading of enabled engines."""
     monkeypatch.syspath_prepend(stubs_path) # Ensure dummy_engine is findable
-    
+
     manager = OCREngineManager(app_config=basic_app_config_dict, parent_logger=mock_logger)
     manager.discover_and_load_engines()
 
@@ -157,7 +157,7 @@ def test_discover_and_load_engines_module_not_found(basic_app_config_dict, caplo
     }
     manager = OCREngineManager(app_config=bad_config, parent_logger=mock_logger)
     manager.discover_and_load_engines()
-    
+
     assert "bad_module_engine" not in manager.engines
     assert any(
         "Failed to import module 'non_existent_stubs.non_existent_engine' for engine 'bad_module_engine'" in record.message
@@ -184,12 +184,12 @@ def test_discover_and_load_engines_class_not_found(basic_app_config_dict, caplog
 def test_discover_and_load_engines_initialization_fails(mock_init, basic_app_config_dict, caplog, mock_logger, monkeypatch):
     """Test engine loading when engine's initialize() method fails."""
     monkeypatch.syspath_prepend(stubs_path)
-    
+
     manager = OCREngineManager(app_config=basic_app_config_dict, parent_logger=mock_logger)
     manager.discover_and_load_engines()
 
     # dummy_engine_1 should fail initialization
-    assert "dummy_engine_1" not in manager.engines 
+    assert "dummy_engine_1" not in manager.engines
     # dummy_engine_2 should also try to load, and if its init is not mocked, it might load
     # For this test, we only care about the one we mocked.
     assert any(
@@ -201,7 +201,7 @@ def test_discover_and_load_engines_initialization_fails(mock_init, basic_app_con
 def test_discover_and_load_engines_not_available(mock_is_available, basic_app_config_dict, caplog, mock_logger, monkeypatch):
     """Test engine loading when engine's is_available() returns False after initialization."""
     monkeypatch.syspath_prepend(stubs_path)
-    
+
     manager = OCREngineManager(app_config=basic_app_config_dict, parent_logger=mock_logger)
     manager.discover_and_load_engines()
 
@@ -225,7 +225,7 @@ def engine_manager_with_loaded_engine(basic_app_config_dict, mock_logger, monkey
 def test_get_engine_success_and_fail(engine_manager_with_loaded_engine, caplog):
     """Test get_engine for success and failure cases."""
     manager = engine_manager_with_loaded_engine
-    
+
     # Success
     engine = manager.get_engine("dummy_engine_1")
     assert engine is not None
@@ -239,7 +239,7 @@ def test_get_engine_success_and_fail(engine_manager_with_loaded_engine, caplog):
         "Engine 'non_existent_engine' was requested but not found" in record.message
         for record in caplog.records if record.levelname == "WARNING"
     )
-    
+
     # Fail (engine loaded but made unavailable - conceptually)
     # To test this properly, we'd need to mock is_available on the instance
     if "dummy_engine_1" in manager.engines:
@@ -260,7 +260,7 @@ def test_orchestrator_init_success(temp_config_file, monkeypatch, caplog):
     caplog.set_level(logging.INFO) # Ensure INFO messages are captured
 
     orchestrator_instance = OCRWorkflowOrchestrator(config_path=temp_config_file)
-    
+
     assert orchestrator_instance.config is not None
     assert "dummy_engine_1" in orchestrator_instance.config.get("ocr_engines", {})
     assert orchestrator_instance.engine_manager is not None
@@ -274,7 +274,7 @@ def test_orchestrator_init_no_config_file(caplog):
     caplog.set_level(logging.WARNING)
     # This will use default logging because load_config applies it on file not found
     orchestrator_instance = OCRWorkflowOrchestrator(config_path="this_config_does_not_exist.yaml")
-    
+
     assert orchestrator_instance.config is not None # load_config returns a default structure
     assert "error" in orchestrator_instance.config.get("app_settings", {})
     assert "this_config_does_not_exist.yaml" in orchestrator_instance.config["app_settings"]["error"]
@@ -317,7 +317,7 @@ def test_load_image_unsupported_format(orchestrator, tmp_path, caplog):
         with pytest.raises(ValueError) as excinfo: # Expecting ValueError from our handler
             orchestrator.load_image(str(invalid_image_file))
         assert "Unsupported image format or corrupted file" in str(excinfo.value)
-    
+
     assert any(f"Cannot identify image file (unsupported format or corrupted): {str(invalid_image_file)}" in message for message in caplog.messages)
 
 @patch.object(OCRWorkflowOrchestrator, 'preprocess_image', side_effect=lambda x: x) # Mock to pass through
@@ -325,7 +325,7 @@ def test_load_image_unsupported_format(orchestrator, tmp_path, caplog):
 def test_process_document_e2e_with_dummy_engine(mock_postprocess, mock_preprocess, orchestrator_with_dummy_engine, tmp_path, caplog):
     """End-to-end style test for process_document with a dummy engine."""
     caplog.set_level(logging.INFO)
-    
+
     dummy_image_file = tmp_path / "e2e_test_image.png"
     try:
         Image.new('RGB', (60, 30), color='blue').save(dummy_image_file)
@@ -340,7 +340,7 @@ def test_process_document_e2e_with_dummy_engine(mock_postprocess, mock_preproces
     assert "text" in result
     assert "Dummy OCR result from TestDummy1" in result["text"]
     assert result["engine_name"] == "TestDummy1"
-    
+
     mock_preprocess.assert_called_once()
     mock_postprocess.assert_called_once()
 
@@ -382,11 +382,11 @@ def test_process_document_engine_selection_logic(orchestrator_with_dummy_engine,
         # 4. No engine requested, no default, rely on first available (monkeypatch config)
         current_config = orchestrator_with_dummy_engine.config.copy()
         del current_config['app_settings']['default_ocr_engine']
-        
+
         # Need to re-init orchestrator or manager with this modified config
         # For simplicity, let's mock the config directly on the orchestrator for this sub-test
         monkeypatch.setattr(orchestrator_with_dummy_engine, 'config', current_config)
-        
+
         result = orchestrator_with_dummy_engine.process_document(str(dummy_image_file))
         # The first available engine could be dummy_engine_1 or dummy_engine_2 depending on dict ordering in test
         # So, we check if it's one of them
@@ -403,7 +403,7 @@ def test_process_document_no_engine_available(orchestrator_no_engines, tmp_path,
         Image.new('RGB', (60, 30), color='yellow').save(dummy_image_file)
     except ImportError:
         pytest.skip("Pillow not available or issue creating image, skipping no engine test.")
-    
+
     # Unpatch load_image for this test to use the real one
     with patch.object(orchestrator_no_engines, 'load_image', new=OCRWorkflowOrchestrator.load_image.__get__(orchestrator_no_engines)):
         result = orchestrator_no_engines.process_document(str(dummy_image_file))

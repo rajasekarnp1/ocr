@@ -117,7 +117,7 @@ graph TD
         C[Recognition Ensemble - PaddleOCR PP-OCRv4 + SVTR (ONNX/DirectML)];
         D[PostProcessing - ByT5 (ONNX/DirectML), Qiskit-Simulated Quantum Correction];
     end
-    
+
     subgraph "Local Data & Model Management"
         F[Synthetic Data Gen & Model Store];
     end
@@ -190,7 +190,7 @@ graph TD
         B -- Data --> C(Lite Core OCR Engine);
         C -- Data --> D(Lite Post-Processing);
         D -- Text --> E[Output to Client];
-        
+
         F[Windows Client - Python with Tkinter/Lightweight .NET];
         F <--> A;
         F <--> E;
@@ -201,7 +201,7 @@ graph TD
             D[PostProcessing - Rule-Based / Small NLP model];
         end
     end
-    
+
     style A fill:#D6EAF8,stroke:#333,stroke-width:2px
     style B fill:#D0ECE7,stroke:#333,stroke-width:2px
     style C fill:#A9CCE3,stroke:#333,stroke-width:2px

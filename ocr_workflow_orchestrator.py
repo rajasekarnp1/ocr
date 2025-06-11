@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Optional
 # Assuming these modules are in the same directory or accessible via PYTHONPATH
 from ocr_engine_interface import OCREngine
 from config_loader import load_config, DEFAULT_LOGGING_CONFIG
+from ocr_components.postprocessing_module import OCRPostprocessor
 
 # For image loading - install Pillow: pip install Pillow
 from PIL import Image, UnidentifiedImageError
@@ -57,7 +58,7 @@ class OCREngineManager:
                 self.logger.debug(f"Attempting to load engine '{engine_name}' from module '{module_path}' class '{class_name}'.")
                 engine_module = importlib.import_module(module_path)
                 engine_class = getattr(engine_module, class_name)
-                
+
                 # Pass only the specific engine's config section, not the whole ocr_engines dict
                 engine_instance_config = engine_config_data.get('config', {}) # Assuming engine-specific params are under 'config'
                 if not engine_instance_config and engine_config_data: # Fallback for flat config structure
@@ -67,7 +68,7 @@ class OCREngineManager:
 
                 child_logger = self.logger.getChild(engine_name) # Create a child logger for the engine instance
                 engine_instance: OCREngine = engine_class(engine_config=engine_instance_config, logger=child_logger)
-                
+
                 engine_instance.initialize() # Can raise exceptions
 
                 if engine_instance.is_available():
@@ -84,7 +85,7 @@ class OCREngineManager:
                 self.logger.error(f"TypeError instantiating engine '{engine_name}'. Check constructor arguments: {e}", exc_info=True)
             except Exception as e: # Catch exceptions from engine's initialize() or other instantiation issues
                 self.logger.error(f"Failed to initialize engine '{engine_name}': {e}", exc_info=True)
-        
+
         self.logger.info(f"Engine discovery complete. {len(self.engines)} engines are available.")
 
     def get_engine(self, engine_name: str) -> Optional[OCREngine]:
@@ -124,7 +125,7 @@ class OCRWorkflowOrchestrator:
         """
         # Load configuration first, which also sets up logging
         self.config: Dict[str, Any] = load_config(config_path)
-        
+
         # Now that logging is configured by load_config, get the logger for this class
         self.logger = logging.getLogger(__name__) # Or a specific name like 'OCRWorkflowOrchestrator'
         self.logger.info("OCRWorkflowOrchestrator initializing...")
@@ -135,15 +136,18 @@ class OCRWorkflowOrchestrator:
 
         # Placeholder for Preprocessor and Postprocessor
         self.preprocessor: Optional[Any] = None # Replace Any with actual preprocessor type later
-        self.postprocessor: Optional[Any] = None # Replace Any with actual postprocessor type later
-        self.logger.info("Preprocessor and Postprocessor are placeholders.")
+        # Initialize Postprocessor
+        # OCRPostprocessor expects its config under a 'postprocessing' key in the main config,
+        # or it handles if the key is missing.
+        self.postprocessor = OCRPostprocessor(config=self.config, logger=self.logger.getChild("OCRPostprocessor"))
+        self.logger.info(f"OCRPostprocessor initialized. Preprocessor is still a placeholder.")
 
         available_engines = self.engine_manager.get_available_engines()
         if available_engines:
             self.logger.info(f"Available OCR engines: {', '.join(available_engines)}")
         else:
             self.logger.warning("No OCR engines available after discovery and loading.")
-        
+
         self.logger.info("OCRWorkflowOrchestrator initialized.")
 
     def load_image(self, image_path: str) -> Optional[np.ndarray]:
@@ -203,7 +207,7 @@ class OCRWorkflowOrchestrator:
         if not engine:
             self.logger.error(f"Engine '{engine_name}' not available or not found for recognition.")
             return None
-        
+
         try:
             self.logger.debug(f"Using engine '{engine.get_engine_name()}' for recognition.")
             # Pass language hint if provided by the orchestrator's process_document method
@@ -224,11 +228,26 @@ class OCRWorkflowOrchestrator:
         :param ocr_output: The raw OCR output dictionary.
         :return: The postprocessed OCR output dictionary.
         """
-        self.logger.info("Postprocessing OCR output... (Placeholder - returning as is)")
-        if self.postprocessor:
-            # return self.postprocessor.process(ocr_output) # Conceptual
-            pass
-        return ocr_output
+        self.logger.info("Applying post-processing to OCR output...")
+        if self.postprocessor is None: # Should have been initialized
+            self.logger.warning("Postprocessor not available/initialized. Skipping post-processing step.")
+            return ocr_output
+
+        if ocr_output is None:
+            self.logger.warning("Received None as ocr_output to postprocess. Returning None.")
+            return None
+
+        if not isinstance(ocr_output, dict):
+            self.logger.warning(f"Expected ocr_output to be a dict for postprocessing, got {type(ocr_output)}. Returning as is.")
+            return ocr_output
+
+        try:
+            processed_output = self.postprocessor.process_output(ocr_output)
+            self.logger.info("Post-processing by OCRPostprocessor complete.")
+            return processed_output
+        except Exception as e:
+            self.logger.error(f"Error during post-processing via OCRPostprocessor: {e}", exc_info=True)
+            return ocr_output # Return original output on post-processing error
 
     def process_document(self, image_path: str, requested_engine_name: Optional[str] = None, language_hint: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """
@@ -243,8 +262,8 @@ class OCRWorkflowOrchestrator:
         try:
             image_data = self.load_image(image_path)
             if image_data is None: # Should raise error in load_image
-                return None 
-            
+                return None
+
             preprocessed_data = self.preprocess_image(image_data)
             if preprocessed_data is None:
                 self.logger.error("Preprocessing failed to return data.")
@@ -258,7 +277,7 @@ class OCRWorkflowOrchestrator:
                     engine_name_to_use = requested_engine_name
                 else:
                     self.logger.warning(f"Requested engine '{requested_engine_name}' is not available. Trying default or first available.")
-            
+
             if not engine_name_to_use:
                 default_engine = self.config.get('app_settings', {}).get('default_ocr_engine')
                 if default_engine and default_engine in available_engines:
@@ -267,11 +286,11 @@ class OCRWorkflowOrchestrator:
                 elif available_engines:
                     engine_name_to_use = available_engines[0]
                     self.logger.info(f"Using first available engine: '{engine_name_to_use}'.")
-            
+
             if not engine_name_to_use:
                 self.logger.error("No OCR engine available to process the document.")
                 return None
-            
+
             self.logger.info(f"Selected engine for recognition: '{engine_name_to_use}'.")
             raw_ocr_output = self.run_recognition(preprocessed_data, engine_name_to_use, language_hint=language_hint)
             if raw_ocr_output is None:
@@ -282,7 +301,7 @@ class OCRWorkflowOrchestrator:
             if final_output is None:
                 self.logger.error("Postprocessing failed to return data.")
                 return None
-                
+
             self.logger.info(f"Document processing completed successfully for: '{image_path}' using engine '{engine_name_to_use}'.")
             return final_output
 
@@ -308,7 +327,6 @@ if __name__ == '__main__':
     dummy_config_content = """
 app_settings:
   default_ocr_engine: "dummy_local" # Optional: specify a default
-  # other_app_setting: "value"
 
 ocr_engines:
   dummy_local:
@@ -316,10 +334,19 @@ ocr_engines:
     module: "stubs.dummy_engine"  # Relative to where python is run, or adjust PYTHONPATH
     class: "DummyLocalEngine"
     config: # This is the 'engine_config_data' passed to the engine's __init__
-      name: "MySuperDummy V1" # Engine can use this to override its default name
-      model_path: "models/dummy_model.onnx" # Example specific param
+      name: "MySuperDummy V1"
+      # For DummyLocalEngine, the text returned is hardcoded, but we add params for structure
+      # The important part for this test is to see postprocessing apply to its output.
+      # DummyLocalEngine returns: "Text from DummyLocalEngine for Orchestratr, a dumy engine."
+      model_path: "models/dummy_model.onnx"
       another_param: 123
-  
+
+postprocessing: # Configuration for OCRPostprocessor
+  custom_text_replacements:
+    - ["Orchestratr", "Orchestrator"]
+    - ["dumy", "dummy"]
+    - ["  ", " "] # Example: replace multiple spaces (whitespace cleaner also handles this)
+
   # Example of a disabled engine
   disabled_dummy_engine:
     enabled: false
@@ -332,7 +359,7 @@ ocr_engines:
   misconfigured_engine:
     enabled: true
     module: "stubs.dummy_engine"
-    class: "NonExistentEngineClass" 
+    class: "NonExistentEngineClass"
     config:
       model_path: "models/misconfigured.onnx"
 """
@@ -359,7 +386,7 @@ ocr_engines:
     # 2. Instantiate and use the Orchestrator
     # Logging will be configured by load_config inside OCRWorkflowOrchestrator
     orchestrator = OCRWorkflowOrchestrator(config_path=config_file)
-    
+
     main_logger = logging.getLogger("OrchestratorExample") # Get logger after config is loaded
 
     main_logger.info("\n--- Testing Orchestrator ---")
@@ -367,13 +394,26 @@ ocr_engines:
 
     # Test processing with the successfully loaded dummy engine
     if orchestrator.engine_manager.get_available_engines():
-        main_logger.info(f"\n--- Processing document with specific engine '{orchestrator.engine_manager.get_available_engines()[0]}' ---")
-        result = orchestrator.process_document(dummy_image_path, requested_engine_name=orchestrator.engine_manager.get_available_engines()[0], language_hint="en")
-        main_logger.info(f"Result from process_document: {result}")
-        
+        default_engine_name_for_test = orchestrator.engine_manager.get_available_engines()[0]
+        main_logger.info(f"\n--- Processing document with specific engine '{default_engine_name_for_test}' ---")
+        # DummyLocalEngine returns "Text from DummyLocalEngine for Orchestratr, a dumy engine."
+        # Expected post-processed: "Text from DummyLocalEngine for Orchestrator, a dummy engine."
+        result = orchestrator.process_document(dummy_image_path, requested_engine_name=default_engine_name_for_test, language_hint="en")
+        main_logger.info(f"Result from process_document (specific engine):")
+        main_logger.info(f"  Engine Used: {result.get('engine_name')}")
+        main_logger.info(f"  Processed Text: '{result.get('text')}'")
+
+        expected_text_after_postproc = "Text from DummyLocalEngine for Orchestrator, a dummy engine."
+        assert result.get('text') == expected_text_after_postproc, \
+            f"Postprocessing assertion failed for specific engine. Expected: '{expected_text_after_postproc}', Got: '{result.get('text')}'"
+
         main_logger.info("\n--- Processing document with default engine selection logic ---")
         result_default = orchestrator.process_document(dummy_image_path, language_hint="fr")
-        main_logger.info(f"Result (default engine): {result_default}")
+        main_logger.info(f"Result (default engine):")
+        main_logger.info(f"  Engine Used: {result_default.get('engine_name')}")
+        main_logger.info(f"  Processed Text: '{result_default.get('text')}'")
+        assert result_default.get('text') == expected_text_after_postproc, \
+            f"Postprocessing assertion failed for default engine. Expected: '{expected_text_after_postproc}', Got: '{result_default.get('text')}'"
 
     else:
         main_logger.warning("No engines were loaded successfully, cannot run process_document test.")
@@ -382,7 +422,7 @@ ocr_engines:
     main_logger.info("\n--- Processing non-existent document ---")
     result_non_existent = orchestrator.process_document("non_existent_image.png")
     main_logger.info(f"Result (non-existent file): {result_non_existent}")
-    
+
     # Clean up dummy files
     if os.path.exists(config_file):
         os.remove(config_file)

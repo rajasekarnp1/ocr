@@ -115,7 +115,7 @@ def test_load_non_existent_config(caplog):
     """Test loading a non-existent configuration file."""
     # Ensure the root logger captures warnings for this test if not already configured
     logging.getLogger().setLevel(logging.WARNING)
-    
+
     config_path = "non_existent_config_file.yaml"
     loaded_config = load_config(config_path)
 
@@ -202,7 +202,7 @@ def test_load_config_precedence_logging_config_missing(tmp_path, caplog):
     # This assumes 'ConfigLoader' is defined in DEFAULT_LOGGING_CONFIG with INFO level.
     default_config_loader_level = DEFAULT_LOGGING_CONFIG.get('loggers', {}).get('ConfigLoader', {}).get('level', 'INFO').upper()
     assert logging.getLogger("ConfigLoader").level == getattr(logging, default_config_loader_level)
-    
+
     assert any(
         "Default logging configuration applied as no 'logging' section found in config file." in record.message
         for record in caplog.records
@@ -224,7 +224,7 @@ def test_load_config_applies_custom_logging(tmp_path):
     # Verify that the custom logging setting was applied
     test_app_logger = logging.getLogger(custom_logger_name)
     assert test_app_logger.level == getattr(logging, custom_log_level_str)
-    
+
     # Check if the specific handler from the custom config is present
     # This is a bit more robust than checking all handlers if the default also adds some.
     handler_found = False

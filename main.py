@@ -1,271 +1,227 @@
-"""
-Main entry point for the OCR-X application (conceptual).
-
-This script demonstrates the initialization and use of the OCRWorkflowOrchestrator
-to process a dummy image using a dummy OCR engine.
-"""
-
 import logging
+import logging.config
 import os
-import sys
-import yaml # PyYAML must be installed
-from pathlib import Path
-from typing import Dict, Any
+import shutil # For directory cleanup
+import numpy as np
+import cv2 # For creating dummy image
+import yaml # For loading simple config if config_loader is not used directly
 
-# --- Path Setup ---
-# Ensure project root is in sys.path for direct module imports
-# This assumes main.py is in the project root.
-# If it's in a 'src' or 'app' subdirectory, this might need adjustment
-# or preferably, the project is structured as an installable package.
-project_root = Path(__file__).resolve().parent
-if str(project_root) not in sys.path:
-    sys.path.insert(0, str(project_root))
-# --- End Path Setup ---
+# Assuming these modules are in PYTHONPATH or same directory level
+from config_loader import load_config # Use the project's config loader
+from ocr_workflow_orchestrator import OCRWorkflowOrchestrator
 
-try:
-    from ocr_workflow_orchestrator import OCRWorkflowOrchestrator
-    from config_loader import load_config, DEFAULT_LOGGING_CONFIG # load_config also handles logging setup
-    from PIL import Image # Pillow must be installed
-except ImportError as e:
-    print(f"Error: Missing critical dependencies. Please ensure all required packages are installed. Details: {e}")
-    print("You might need to run: pip install PyYAML Pillow Pillow") # Pillow is for PIL
-    sys.exit(1)
+# Global logger for this test script
+logger = logging.getLogger(__name__)
 
-# --- Global Variables ---
-CONFIG_FILE_NAME = "temp_main_config.yaml"
-DUMMY_IMAGE_NAME = "temp_dummy_image.png"
+# --- Test Configuration & Setup ---
+TEST_CONFIG_FILE = "test_engines_config.yaml"
+DUMMY_MODEL_DIR = "models_test" # Relative to script execution
+DUMMY_DET_MODEL_FILE = os.path.join(DUMMY_MODEL_DIR, "dummy_det.onnx")
+DUMMY_REC_MODEL_FILE = os.path.join(DUMMY_MODEL_DIR, "dummy_rec.onnx")
+DUMMY_CHARS_FILE = os.path.join(DUMMY_MODEL_DIR, "dummy_chars.txt")
+DUMMY_IMAGE_FILE = "dummy_integration_test_image.png"
 
-# Logger will be configured by load_config() called within main()
-logger: logging.Logger
+# Google Cloud API Key Path - User should set this environment variable for live test
+# OR update test_engines_config.yaml directly (but env var is safer for shared code)
+GOOGLE_API_KEY_ENV_VAR = "GOOGLE_TEST_API_KEY_PATH"
 
+def setup_dummy_files_for_local_engine():
+    """Creates dummy directories and files required by LocalOCREngine config."""
+    logger.info(f"Setting up dummy files in {DUMMY_MODEL_DIR}...")
+    os.makedirs(DUMMY_MODEL_DIR, exist_ok=True)
 
-def create_dummy_config_file(config_path: Path) -> None:
-    """Creates a dummy YAML configuration file for demonstration."""
-    global logger
-    logger.info(f"Creating dummy configuration file at: {config_path}")
-    
-    # Ensure the stubs directory is correctly referenced relative to project_root
-    # For dynamic module loading, the path needs to be understood by importlib
-    # Assuming 'stubs' is a top-level directory alongside 'ocr_workflow_orchestrator.py' etc.
-    # If main.py is at project_root, then "stubs.dummy_engine" is correct.
-    
-    dummy_config_content: Dict[str, Any] = {
-        "app_settings": {
-            "default_ocr_engine": "dummy_local_engine", # Setting a default for testing
-            "some_other_setting": "value123"
-        },
-        "ocr_engines": {
-            "dummy_local_engine": {
-                "enabled": True,
-                "module": "stubs.dummy_engine",  # Path for importlib
-                "class": "DummyLocalEngine",
-                "name": "My Main Test Dummy Engine", # Custom name for the engine instance
-                "config": { # Engine-specific configuration map
-                    "model_path": "models/main_dummy_model.onnx",
-                    "custom_param": "engine_specific_value"
-                }
-            },
-            "another_engine_example": {
-                "enabled": False, # This engine won't be loaded
-                "module": "stubs.dummy_engine",
-                "class": "DummyLocalEngine",
-                "name": "My Disabled Dummy",
-                "config": {"model_path": "models/another.onnx"}
-            }
-        },
-        "logging": DEFAULT_LOGGING_CONFIG.copy() # Start with default logging
-    }
-    # Optionally customize logging for the main example
-    if "loggers" in dummy_config_content["logging"]:
-        dummy_config_content["logging"]["loggers"]["MainApp"] = {
-            "handlers": ["console"], "level": "INFO", "propagate": False
-        }
-        dummy_config_content["logging"]["loggers"]["OCRWorkflowOrchestrator"] = {
-             "handlers": ["console"], "level": "INFO", "propagate": False
-        }
-        dummy_config_content["logging"]["loggers"]["OCREngineManager"] = {
-             "handlers": ["console"], "level": "INFO", "propagate": False
-        }
-        dummy_config_content["logging"]["loggers"]["stubs.dummy_engine"] = { # Configure stub logger
-             "handlers": ["console"], "level": "INFO", "propagate": False
-        }
+    # Create empty dummy files (or with minimal valid content if needed by file readers)
+    with open(DUMMY_DET_MODEL_FILE, 'w') as f: f.write("dummy_onnx_det_content")
+    with open(DUMMY_REC_MODEL_FILE, 'w') as f: f.write("dummy_onnx_rec_content")
+    with open(DUMMY_CHARS_FILE, 'w') as f:
+        f.write("a\n"); f.write("b\n"); f.write("c\n"); # Minimal char set
+    logger.info("Dummy files created.")
 
+def cleanup_dummy_files():
+    """Removes dummy files and directories created during setup."""
+    logger.info("Cleaning up dummy files and directories...")
+    if os.path.exists(DUMMY_IMAGE_FILE):
+        os.remove(DUMMY_IMAGE_FILE)
+        logger.debug(f"Removed {DUMMY_IMAGE_FILE}")
+    if os.path.exists(DUMMY_MODEL_DIR):
+        shutil.rmtree(DUMMY_MODEL_DIR) # Recursively remove directory
+        logger.debug(f"Removed directory {DUMMY_MODEL_DIR}")
+    logger.info("Cleanup complete.")
 
-    with open(config_path, "w", encoding="utf-8") as f:
-        yaml.dump(dummy_config_content, f)
-    logger.debug(f"Dummy configuration content: \n{yaml.dump(dummy_config_content)}")
-
-
-def create_dummy_image_file(image_path: Path) -> None:
-    """Creates a simple dummy PNG image file using Pillow."""
-    global logger
-    logger.info(f"Creating dummy image file at: {image_path}")
-    try:
-        img = Image.new('RGB', (200, 100), color = 'skyblue')
-        # You could add text to the image if you had a font file and wanted more complex dummy data
-        # from PIL import ImageDraw, ImageFont
-        # draw = ImageDraw.Draw(img)
-        # try:
-        #     font = ImageFont.truetype("arial.ttf", 15) # Or some other common font
-        # except IOError:
-        #     font = ImageFont.load_default()
-        # draw.text((10,10), "Hello OCR-X", fill=(0,0,0), font=font)
-        img.save(image_path, "PNG")
-        logger.debug(f"Dummy image '{image_path}' created successfully.")
-    except Exception as e:
-        logger.error(f"Failed to create dummy image using Pillow: {e}. Please ensure Pillow is installed.", exc_info=True)
-        # Create an empty file to avoid FileNotFoundError later if Pillow fails,
-        # though the orchestrator's image loading will likely fail then.
-        if not image_path.exists():
-            image_path.touch()
-
+def create_dummy_image():
+    """Creates a dummy image file for testing."""
+    logger.info(f"Creating dummy image: {DUMMY_IMAGE_FILE}...")
+    image = np.full((200, 400, 3), (220, 220, 220), dtype=np.uint8) # Light gray background
+    cv2.putText(image, "OCR Test Text", (50, 80), cv2.FONT_HERSHEY_SIMPLEX, 1, (30, 30, 30), 2)
+    cv2.putText(image, "Engine Integration", (50, 150), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (50, 50, 50), 2)
+    cv2.imwrite(DUMMY_IMAGE_FILE, image)
+    logger.info("Dummy image created.")
+    return DUMMY_IMAGE_FILE
 
 def main():
     """
-    Main function to demonstrate OCR-X workflow.
+    Main integration test script for OCR Workflow Orchestrator and OCR Engines.
     """
-    # --- Setup Logging ---
-    # Load config which also initializes logging.
-    # We pass a path, but it might not exist yet; load_config handles this.
-    # For the main app, we usually expect config_loader to find or create the config.
-    # Here, we explicitly create it for the demo.
-    
-    # Get a preliminary logger based on defaults before load_config fully configures it.
-    # This ensures that logging for create_dummy_config_file itself is captured.
-    logging.config.dictConfig(DEFAULT_LOGGING_CONFIG)
-    global logger # Make it accessible to helper functions
-    logger = logging.getLogger("MainApp") # Use a specific name for this main script's logger
-    
-    config_file_path = project_root / CONFIG_FILE_NAME
-    dummy_image_file_path = project_root / DUMMY_IMAGE_NAME
-
+    # 1. Load Configuration (includes logging setup from config file)
     try:
-        # 1. Create Dummy Configuration
-        create_dummy_config_file(config_file_path)
-
-        # 2. Create Dummy Image
-        create_dummy_image_file(dummy_image_file_path)
-
-        # 3. Instantiate Orchestrator
-        # The orchestrator will load the config (and re-configure logging if specified in the file)
-        logger.info("Initializing OCRWorkflowOrchestrator...")
-        orchestrator = OCRWorkflowOrchestrator(config_path=str(config_file_path))
-        
-        # Re-assign logger in case load_config within orchestrator changed its config
-        logger = logging.getLogger("MainApp") 
-
-        # 4. Log Available Engines
-        available_engines = orchestrator.engine_manager.get_available_engines()
-        logger.info(f"Available OCR engines after orchestrator init: {available_engines}")
-
-        if not available_engines:
-            logger.error("No OCR engines were loaded by the orchestrator. Cannot proceed with OCR.")
-            return
-
-        # 5. Process Document
-        # Test with the default engine specified in the dummy config
-        logger.info(f"\n--- Processing document '{DUMMY_IMAGE_NAME}' with default engine logic ---")
-        result_default = orchestrator.process_document(str(dummy_image_file_path), language_hint="en")
-
-        if result_default and "error" not in result_default:
-            logger.info(f"OCR Result (default engine): Text = '{result_default.get('text')}'")
-            logger.info(f"Full result (default engine): {result_default}")
-        else:
-            logger.error(f"OCR processing failed or returned an error (default engine): {result_default}")
-
-        # Test with a specifically requested (and available) engine
-        if "dummy_local_engine" in available_engines:
-            logger.info(f"\n--- Processing document '{DUMMY_IMAGE_NAME}' with requested engine 'dummy_local_engine' ---")
-            result_specific = orchestrator.process_document(str(dummy_image_file_path), requested_engine_name="dummy_local_engine", language_hint="de")
-            if result_specific and "error" not in result_specific:
-                logger.info(f"OCR Result (specific engine): Text = '{result_specific.get('text')}'")
-                logger.info(f"Full result (specific engine): {result_specific}")
-            else:
-                logger.error(f"OCR processing failed or returned an error (specific engine): {result_specific}")
-        else:
-            logger.warning("Skipping specific engine test as 'dummy_local_engine' is not available.")
-
-    except FileNotFoundError as e:
-        logger.error(f"File not found during main execution: {e}", exc_info=True)
-    except ImportError as e: # Catching potential import errors from dynamic loading
-        logger.error(f"Import error during main execution, possibly an engine module: {e}", exc_info=True)
+        config = load_config(TEST_CONFIG_FILE) # This also applies logging config
+        logger.info(f"Successfully loaded configuration from {TEST_CONFIG_FILE}")
+    except FileNotFoundError:
+        logger.error(f"FATAL: Test configuration file '{TEST_CONFIG_FILE}' not found. Aborting.")
+        return
     except Exception as e:
-        logger.critical(f"An unexpected error occurred in main: {e}", exc_info=True)
-    finally:
-        # 6. Cleanup
-        logger.info("Cleaning up temporary files...")
-        if config_file_path.exists():
-            try:
-                os.remove(config_file_path)
-                logger.info(f"Removed dummy config file: {config_file_path}")
-            except Exception as e:
-                logger.error(f"Error removing dummy config file '{config_file_path}': {e}")
-        
-        if dummy_image_file_path.exists():
-            try:
-                os.remove(dummy_image_file_path)
-                logger.info(f"Removed dummy image file: {dummy_image_file_path}")
-            except Exception as e:
-                logger.error(f"Error removing dummy image file '{dummy_image_file_path}': {e}")
-        
-        log_file_path = project_root / "ocrx_app_debug.log" # From default logging config
-        if log_file_path.exists():
-            logger.info(f"Note: A log file may have been created at '{log_file_path}' if file logging was enabled.")
+        logger.error(f"FATAL: Error loading configuration: {e}. Aborting.", exc_info=True)
+        return
+
+    # 2. Setup Dummy Files for Local Engine
+    # These paths are hardcoded here but match test_engines_config.yaml
+    # LocalOCREngine's initialize() will try to load these.
+    # If ONNX runtime fails to load them as valid models, LocalOCREngine should report itself as unavailable.
+    setup_dummy_files_for_local_engine()
+
+    # 3. Handle Google Cloud API Key for Google Engine
+    # The config file has a placeholder path. Override if env var is set.
+    google_engine_config = None
+    try:
+        # Find the Google engine config to potentially update its api_key_path
+        for name, cfg_dict in config.get('ocr_engines', {}).items():
+            if cfg_dict.get('class') == 'GoogleCloudOCREngine':
+                google_engine_config = cfg_dict['config'] # Get the nested 'config' dictionary
+                break
+    except AttributeError as e: # Handle if config is not a dict
+        logger.error(f"Configuration 'ocr_engines' is not a dictionary or is malformed: {e}")
+        google_engine_config = {} # Ensure it's a dict to avoid further errors
+
+    # Ensure google_engine_config is a dictionary before trying to access/modify it
+    if not isinstance(google_engine_config, dict):
+        logger.warning("Google Cloud Vision engine configuration not found or not a dictionary in test_engines_config.yaml.")
+        google_engine_config = {} # Initialize to empty dict to prevent errors below
+
+    # Check environment variable for actual key path
+    actual_google_api_key_path = os.getenv(GOOGLE_API_KEY_ENV_VAR)
+    skip_google_tests = False
+
+    if actual_google_api_key_path and os.path.exists(actual_google_api_key_path):
+        logger.info(f"Using Google API key from environment variable {GOOGLE_API_KEY_ENV_VAR}: {actual_google_api_key_path}")
+        if google_engine_config is not None: # Should exist if config structure is correct
+             google_engine_config['api_key_path'] = actual_google_api_key_path
+        else: # Should not happen if config is correct
+             logger.warning("Google engine 'config' section not found to update api_key_path.")
+    else:
+        # Check if the path in the config file (placeholder or user-set) exists
+        config_google_key_path = google_engine_config.get('api_key_path', "path/to/your/service_account_key.json")
+        if os.path.exists(config_google_key_path) and config_google_key_path != "path/to/your/service_account_key.json":
+            logger.info(f"Using Google API key from config file: {config_google_key_path}")
+            # No change needed to config dict if path in file is valid and not placeholder
+        else:
+            logger.warning(f"Google API key path not found or is placeholder ('{config_google_key_path}'). "
+                           f"Set the {GOOGLE_API_KEY_ENV_VAR} environment variable or update config to run Google Cloud tests.")
+            skip_google_tests = True
 
 
-if __name__ == '__main__':
-    # Basic logging setup for the very start, will be overridden by load_config in main()
-    # This ensures that if main() itself has an early issue, it's logged.
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    main_logger_bootstrap = logging.getLogger("BootstrapMain") # Different name to avoid conflict
-    main_logger_bootstrap.info("Starting OCR-X main application...")
+    # 4. Create Dummy Image for Processing
+    dummy_image_path = create_dummy_image()
+
+    # 5. Instantiate OCRWorkflowOrchestrator
+    logger.info("Initializing OCRWorkflowOrchestrator...")
+    try:
+        orchestrator = OCRWorkflowOrchestrator(config)
+    except Exception as e:
+        logger.error(f"Failed to initialize OCRWorkflowOrchestrator: {e}", exc_info=True)
+        cleanup_dummy_files()
+        return
+    logger.info("OCRWorkflowOrchestrator initialized.")
+
+    # 6. Test Engine Availability
+    available_engines = orchestrator.engine_manager.get_available_engines()
+    logger.info(f"Available OCR engines: {list(available_engines.keys())}")
+
+    # Assertions for availability (depends on dummy files and keys)
+    # Local engine *might* be available if it considers empty files sufficient for init structure,
+    # but its recognize() would likely fail if ONNX models are not valid.
+    # Or, it might correctly report unavailable if ONNX session creation fails with dummy files.
+    if "PaddleOCR ONNX (Test)" in available_engines:
+        logger.info("LocalOCREngine (PaddleOCR ONNX (Test)) reported as available.")
+    else:
+        logger.warning("LocalOCREngine (PaddleOCR ONNX (Test)) reported as NOT available. This might be expected if dummy ONNX files cause its initialization to fail.")
+
+    if not skip_google_tests:
+        if "Google Cloud Vision API (Test)" in available_engines:
+            logger.info("GoogleCloudOCREngine (Google Cloud Vision API (Test)) reported as available.")
+        else:
+            logger.error("GoogleCloudOCREngine (Google Cloud Vision API (Test)) reported as NOT available, but key was provided/found.")
+    else:
+        if "Google Cloud Vision API (Test)" in available_engines:
+             logger.error("GoogleCloudOCREngine reported as available, but tests were marked to be skipped (key likely missing initially). This is unexpected.")
+        else:
+             logger.info("GoogleCloudOCREngine tests are skipped as API key is not available.")
+
+
+    # 7. Test Processing with Local Engine
+    logger.info("\n--- Testing with Local Engine (PaddleOCR ONNX (Test)) ---")
+    try:
+        # Even if "available", recognition might fail if dummy ONNX files are not loadable by runtime
+        result_local = orchestrator.process_document(dummy_image_path, requested_engine_name="local_paddle_ocr")
+        logger.info(f"Result from Local Engine: {result_local}")
+        assert isinstance(result_local, dict), "Local engine result should be a dict."
+        assert "text" in result_local, "Local engine result should contain 'text' key."
+        # Further assertions could check if segments are empty if dummy models can't be processed.
+    except RuntimeError as e: # Orchestrator raises RuntimeError if engine not available or processing fails
+        logger.error(f"Error processing with Local Engine: {e}")
+        if "not available" in str(e).lower():
+             logger.info("This error is expected if the local engine's dummy models made it unavailable.")
+    except Exception as e:
+        logger.error(f"Unexpected error during local engine processing test: {e}", exc_info=True)
+
+
+    # 8. Test Processing with Google Cloud Engine (Conditional)
+    if not skip_google_tests:
+        logger.info("\n--- Testing with Google Cloud Engine (Google Cloud Vision API (Test)) ---")
+        try:
+            result_google = orchestrator.process_document(dummy_image_path, requested_engine_name="google_cloud_vision", language_hint="en")
+            logger.info(f"Result from Google Cloud Engine: {result_google.get('text', '')[:200]}...") # Print start of text
+            if result_google.get("segments"): logger.info(f"First segment from Google: {result_google['segments'][0]}")
+            assert isinstance(result_google, dict), "Google engine result should be a dict."
+            assert "text" in result_google, "Google engine result should contain 'text' key."
+            if result_google.get("error"):  # Check if API returned an error message
+                logger.warning(f"Google Cloud API returned an error: {result_google['error']}")
+        except RuntimeError as e: # Orchestrator raises RuntimeError if engine not available or processing fails
+            logger.error(f"Error processing with Google Cloud Engine: {e}")
+        except Exception as e:
+            logger.error(f"Unexpected error during Google Cloud engine processing test: {e}", exc_info=True)
+    else:
+        logger.info("\n--- Skipping Google Cloud Engine Test (API key not configured) ---")
+
+    # 9. Test Default Engine Processing
+    logger.info("\n--- Testing with Default Engine ---")
+    default_engine_name = config.get("app_settings", {}).get("default_ocr_engine")
+    if default_engine_name == "google_cloud_vision" and skip_google_tests:
+        logger.warning(f"Default engine is Google Cloud, but tests are skipped. Cannot test default engine processing.")
+    else:
+        try:
+            logger.info(f"Attempting processing with default engine: {default_engine_name}")
+            result_default = orchestrator.process_document(dummy_image_path)
+            logger.info(f"Result from Default Engine ({result_default.get('engine_name')}): {result_default.get('text', '')[:100]}...")
+            assert isinstance(result_default, dict), "Default engine result should be a dict."
+            assert "text" in result_default, "Default engine result should contain 'text' key."
+            assert result_default.get("engine_name", "").lower().startswith(default_engine_name.split('_')[0].lower()) # Check if correct engine was used
+        except RuntimeError as e:
+            logger.error(f"Error processing with Default Engine: {e}")
+            if default_engine_name == "local_paddle_ocr" and "not available" in str(e).lower():
+                logger.info("This error is expected for local engine if dummy models made it unavailable.")
+        except Exception as e:
+            logger.error(f"Unexpected error during default engine processing test: {e}", exc_info=True)
+
+
+    # 10. Cleanup
+    cleanup_dummy_files()
+    logger.info("\nIntegration Test Run Finished.")
+
+if __name__ == "__main__":
+    # Setup basic logging if this script is run directly and config doesn't load/setup logging
+    if not logging.getLogger().hasHandlers(): # Check if logging is already configured
+        logging.basicConfig(level=logging.INFO,
+                            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                            handlers=[logging.StreamHandler()])
     main()
-    main_logger_bootstrap.info("OCR-X main application finished.")
-
 ```
-The `main.py` file has been created with the specified structure and functionality.
-
-**Key features implemented:**
-
-1.  **Path Setup:**
-    *   The project root is determined using `Path(__file__).resolve().parent`.
-    *   This project root is added to `sys.path` to ensure that modules like `ocr_workflow_orchestrator`, `config_loader`, `ocr_engine_interface`, and the `stubs` directory are correctly importable when `main.py` is run directly from the project root.
-
-2.  **Imports:**
-    *   Imports `OCRWorkflowOrchestrator`, `load_config`, `DEFAULT_LOGGING_CONFIG`, `logging`, `os`, `sys`, `yaml`, `pathlib.Path`, `typing.Dict`, `typing.Any`, and `PIL.Image`.
-    *   Includes a try-except block for initial imports to provide a user-friendly message if critical dependencies like PyYAML or Pillow are missing.
-
-3.  **Global Variables:**
-    *   `CONFIG_FILE_NAME` ("temp\_main\_config.yaml") and `DUMMY_IMAGE_NAME` ("temp\_dummy\_image.png") are defined for clarity.
-    *   A global `logger` variable is declared, to be initialized within `main()`.
-
-4.  **`create_dummy_config_file(config_path: Path)` Function:**
-    *   Creates a YAML configuration file (`temp_main_config.yaml`) programmatically.
-    *   The configuration includes:
-        *   `app_settings` with a `default_ocr_engine` set to "dummy\_local\_engine".
-        *   `ocr_engines` section defining `dummy_local_engine` (enabled, pointing to `stubs.dummy_engine.DummyLocalEngine`, with a custom name and specific config parameters) and a disabled engine example.
-        *   A `logging` section initialized from `DEFAULT_LOGGING_CONFIG` and then customized to set INFO level for key application loggers (`MainApp`, `OCRWorkflowOrchestrator`, `OCREngineManager`, `stubs.dummy_engine`) for the demonstration.
-
-5.  **`create_dummy_image_file(image_path: Path)` Function:**
-    *   Uses `PIL.Image` to create a simple, small sky-blue PNG image (`temp_dummy_image.png`).
-    *   Includes basic error handling in case Pillow fails to create the image.
-
-6.  **`main()` Function:**
-    *   **Logging Setup:** Initializes a global `logger` named "MainApp" using `DEFAULT_LOGGING_CONFIG` *before* creating dummy files, ensuring that the creation process itself is logged. The `OCRWorkflowOrchestrator` will later re-apply logging based on the content of the dummy config file.
-    *   **Dummy File Creation:** Calls `create_dummy_config_file()` and `create_dummy_image_file()`.
-    *   **Orchestrator Instantiation:** Creates an instance of `OCRWorkflowOrchestrator`, passing the path to the dummy config file. The logger is re-obtained after this step.
-    *   **Log Available Engines:** Retrieves and logs the list of available engines from the `engine_manager`.
-    *   **Process Document:**
-        *   Calls `orchestrator.process_document()` first using the default engine logic (since `default_ocr_engine` is set in the dummy config).
-        *   Then, calls `orchestrator.process_document()` again, explicitly requesting the "dummy\_local\_engine".
-        *   Language hints (`"en"`, `"de"`) are passed for demonstration.
-    *   **Print Result:** Logs the text result or an error message based on the outcome.
-    *   **Cleanup:** Includes a `finally` block to ensure the dummy config and image files are deleted. It also logs a message about the potential creation of `ocrx_app_debug.log` if file logging was active.
-    *   **Error Handling:** A main `try...except...finally` block wraps the core logic to catch and log major exceptions (`FileNotFoundError`, `ImportError`, generic `Exception`).
-
-7.  **`if __name__ == '__main__':` Block:**
-    *   Sets up a very basic bootstrap logger.
-    *   Calls the `main()` function.
-    *   Logs start and finish messages.
-
-This script should now provide a runnable example demonstrating the core orchestration logic, dynamic engine loading (via the dummy engine), and configuration/logging setup. It creates its own temporary dependencies (config and image) and cleans them up.

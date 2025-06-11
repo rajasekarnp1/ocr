@@ -101,7 +101,7 @@ def load_config(config_path: str = "config.yaml") -> Dict[str, Any]:
                 module_logger.error(f"Unsupported configuration file format: {config_path}. Must be YAML or JSON.")
                 # Return minimal config for consistency upon failure
                 return {'logging': DEFAULT_LOGGING_CONFIG, 'app_settings': {'error': f"Unsupported config format: {config_path}"}}
-        
+
         if not config_data: # Handle empty config file
             logging.config.dictConfig(DEFAULT_LOGGING_CONFIG)
             logging_applied_custom = False
@@ -111,10 +111,10 @@ def load_config(config_path: str = "config.yaml") -> Dict[str, Any]:
         logging_config_to_apply = config_data.get('logging', DEFAULT_LOGGING_CONFIG)
         logging.config.dictConfig(logging_config_to_apply)
         logging_applied_custom = True if 'logging' in config_data else False
-        
+
         # Now that logging is configured (either default or custom), log the success message.
         # Re-initialize module_logger in case its settings were changed by dictConfig
-        global module_logger 
+        global module_logger
         module_logger = logging.getLogger(__name__) # Or 'ConfigLoader' if named that way
 
         module_logger.info(f"Configuration loaded successfully from '{config_path}'.")
@@ -122,7 +122,7 @@ def load_config(config_path: str = "config.yaml") -> Dict[str, Any]:
             module_logger.info("Custom logging configuration applied from file.")
         else:
             module_logger.info("Default logging configuration applied as no 'logging' section found in config file.")
-            
+
         return config_data
 
     except (yaml.YAMLError, json.JSONDecodeError) as parse_err:
@@ -198,11 +198,11 @@ logging:
     test_config_file_name = "config_example.yaml"
     with open(test_config_file_name, "w", encoding="utf-8") as f:
         f.write(dummy_config_content)
-    
+
     # --- Test Case 1: Load the created config file ---
     print(f"\n--- Attempting to load '{test_config_file_name}' ---")
     config = load_config(config_path=test_config_file_name)
-    
+
     # Accessing some config values (after logging is configured)
     main_app_logger = logging.getLogger("MainAppExample") # Using a generic logger for app messages
     if config and 'app_settings' in config:
@@ -237,7 +237,7 @@ logging:
     invalid_config_file_name = "invalid_config.yaml"
     with open(invalid_config_file_name, "w", encoding="utf-8") as f:
         f.write("app_settings: {version: 1.0\nlogging: [invalid_yaml_structure") # Malformed YAML
-    
+
     invalid_config = load_config(config_path=invalid_config_file_name)
     if 'app_settings' in invalid_config and 'error' in invalid_config['app_settings']:
          main_app_logger.info(f"Load_config response for invalid file: {invalid_config['app_settings']['error']}")
@@ -249,7 +249,7 @@ logging:
     empty_config_file_name = "empty_config.yaml"
     with open(empty_config_file_name, "w", encoding="utf-8") as f:
         pass # Create an empty file
-    
+
     empty_config = load_config(config_path=empty_config_file_name)
     if 'app_settings' in empty_config and 'error' in empty_config['app_settings']:
          main_app_logger.info(f"Load_config response for empty file: {empty_config['app_settings']['error']}")

@@ -101,7 +101,7 @@ class OCREngine(ABC):
 if __name__ == '__main__':
     # This section is for conceptual demonstration and will not be executable
     # as OCREngine is an ABC. Concrete implementations would be tested.
-    
+
     # Example of how a concrete class might inherit (conceptual)
     class MyDummyOCREngine(OCREngine):
         def __init__(self, engine_config: Dict[str, Any], logger: logging.Logger):
@@ -114,7 +114,7 @@ if __name__ == '__main__':
             if not self.engine_config.get("model_path"):
                 self.logger.error("Model path not provided in engine_config.")
                 raise ValueError("Model path is required for MyDummyOCREngine.")
-            
+
             self.model = f"Loaded_Model_From_{self.engine_config['model_path']}"
             self._is_initialized = True # Set flag on successful initialization
             self.logger.info(f"{self.get_engine_name()} initialized successfully.")
@@ -129,7 +129,7 @@ if __name__ == '__main__':
             recognized_text = f"Dummy recognized text from {self.get_engine_name()}"
             if language_hint:
                 recognized_text += f" with language hint '{language_hint}'"
-            
+
             return {
                 "text": recognized_text,
                 "confidence": 0.85,
@@ -167,20 +167,20 @@ if __name__ == '__main__':
     # 2. Create engine configuration
     # dummy_engine_config = {
     #     "model_path": "path/to/dummy_model.onnx",
-    #     "api_key_placeholder": "dummy_api_key_if_needed" 
+    #     "api_key_placeholder": "dummy_api_key_if_needed"
     # }
 
     # 3. Instantiate and initialize the dummy engine
     # try:
     #     dummy_engine = MyDummyOCREngine(engine_config=dummy_engine_config, logger=example_logger)
     #     dummy_engine.initialize()
-        
+
     #     if dummy_engine.is_available():
     #         example_logger.info(f"Engine '{dummy_engine.get_engine_name()}' is available.")
-            
+
     #         # Simulate image data (e.g., a NumPy array or path string)
     #         mock_image_data_np_array = "This_is_where_image_data_would_be" # Using string for placeholder
-            
+
     #         results = dummy_engine.recognize(image_data=mock_image_data_np_array, language_hint="en-US")
     #         example_logger.info(f"OCR Results:\n{json.dumps(results, indent=2)}")
 
