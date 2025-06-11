@@ -1,336 +1,243 @@
-# src/training/dataset.py
-"""
-PyTorch Dataset and DataLoader implementations for loading and preparing audio data.
-"""
-import os
 import torch
 from torch.utils.data import Dataset, DataLoader
-import torchaudio
-# from src.audio_io import read_audio # Use your project's audio reading
-# from src.preprocessing import normalize_audio, get_mel_spectrogram # Use your project's preprocessing
+import os
+import random
+import logging
+import numpy as np # Added for np.pad and np.random.randn if needed for dummy data
 
-# Fallback if src.audio_io or src.preprocessing are not found (e.g. running standalone)
+# Assuming audio_io and preprocessing are in src, and project is structured to allow this import.
+# This might require running with python -m src.training.dataset or proper PYTHONPATH.
 try:
-    from src.audio_io import read_audio
+    from ..audio_io import load_audio
 except ImportError:
-    print("Warning: src.audio_io not found, using torchaudio for reading as fallback in dataset.py.")
-    read_audio = None # Will be handled in read_audio_torchaudio_fallback
-
-try:
-    from src.preprocessing import normalize_audio, get_mel_spectrogram
-except ImportError:
-    print("Warning: src.preprocessing not found, dummy preprocessing will be used in dataset.py.")
-    def normalize_audio(audio, target_db=-20.0): return audio # Dummy
-    def get_mel_spectrogram(audio, sr, **kwargs): return torch.randn(128, 256) # Dummy, returns fixed size tensor
-
-
-def read_audio_torchaudio_fallback(file_path, target_sr=None):
-    """Fallback audio reading using torchaudio if project's read_audio is not available."""
-    try:
-        waveform, sr = torchaudio.load(file_path)
-        if target_sr is not None and sr != target_sr:
-            resampler = torchaudio.transforms.Resample(sr, target_sr)
-            waveform = resampler(waveform)
-            sr = target_sr
-        if waveform.shape[0] > 1: # Convert to mono if stereo
-            waveform = torch.mean(waveform, dim=0, keepdim=True)
-        return waveform.squeeze().numpy(), sr # Return as numpy array to match typical read_audio
-    except Exception as e:
-        print(f"Error reading audio file {file_path} with torchaudio: {e}")
-        return None, None
+    logger = logging.getLogger(__name__) # Ensure logger is defined for this block
+    logger.error("Failed to import load_audio from ..audio_io. Using dummy load_audio for dataset.py.")
+    # Dummy load_audio if the import fails (e.g. torch/librosa not installed)
+    def load_audio(file_path: str, target_sr: int = None, mono: bool = True) -> tuple[np.ndarray | None, int | None]:
+        logger.warning(f"Using DUMMY load_audio for {file_path}. Returns random noise.")
+        if target_sr is None: target_sr = 16000 # Default dummy SR
+        # Return random noise of approx 1 second length as a NumPy array
+        return np.random.randn(target_sr).astype(np.float32), target_sr
 
 
-class AudioFileDataset(Dataset):
-    def __init__(self, audio_dir, target_sr=44100, segment_length_samples=None,
-                 preprocessing_fn=None, file_extension='wav',
-                 use_mel_spectrogram=False, mel_params=None):
-        """
-        Dataset for loading audio files from a directory.
+logger = logging.getLogger(__name__)
+if not logger.handlers:
+    handler = logging.StreamHandler()
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
 
-        Args:
-            audio_dir (str): Directory containing audio files.
-            target_sr (int): Target sampling rate to resample audio to.
-            segment_length_samples (int, optional): If provided, audio is randomly segmented.
-                                                   Otherwise, full audio files are returned.
-            preprocessing_fn (callable, optional): A function to apply to the loaded audio data.
-                                                   Takes (audio_data, sr) as input.
-            file_extension (str): Extension of audio files to look for (e.g., 'wav', 'mp3').
-            use_mel_spectrogram (bool): If True, converts audio to mel spectrogram.
-            mel_params (dict, optional): Parameters for mel spectrogram computation
-                                         (e.g., n_fft, hop_length, n_mels).
-        """
-        self.audio_dir = audio_dir
+class PairedAudioDataset(Dataset):
+    """
+    Dataset for loading pairs of low-resolution and high-resolution audio files.
+    Assumes that files with the same name in lr_dir and hr_dir form a pair.
+    """
+    def __init__(self,
+                 lr_dir: str,
+                 hr_dir: str,
+                 target_sr: int,
+                 segment_length: int = None,
+                 normalize: bool = False, # Changed default to False as no normalize_fn is passed yet
+                 ):
+        super().__init__()
+        self.lr_dir = lr_dir
+        self.hr_dir = hr_dir
         self.target_sr = target_sr
-        self.segment_length_samples = segment_length_samples
-        self.preprocessing_fn = preprocessing_fn
-        self.use_mel_spectrogram = use_mel_spectrogram
-        self.mel_params = mel_params if mel_params is not None else {}
+        self.segment_length = segment_length
+        self.normalize = normalize
 
-        self.file_paths = []
-        for root, _, files in os.walk(audio_dir):
-            for file in files:
-                if file.lower().endswith(f".{file_extension.lower()}"):
-                    self.file_paths.append(os.path.join(root, file))
+        try:
+            lr_files_all = sorted([os.path.join(lr_dir, f) for f in os.listdir(lr_dir) if os.path.isfile(os.path.join(lr_dir, f))])
+            hr_files_all = sorted([os.path.join(hr_dir, f) for f in os.listdir(hr_dir) if os.path.isfile(os.path.join(hr_dir, f))])
+        except FileNotFoundError as e:
+            logger.error(f"Directory not found: {e.filename}. Dataset will be empty.")
+            self.file_pairs = []
+            return
 
-        if not self.file_paths:
-            print(f"Warning: No audio files with extension '{file_extension}' found in {audio_dir}.")
 
-        self._read_audio_fn = read_audio if read_audio is not None else read_audio_torchaudio_fallback
-        print(f"AudioFileDataset initialized with {len(self.file_paths)} files.")
-        if self._read_audio_fn == read_audio_torchaudio_fallback:
-            print("  Using torchaudio for audio reading.")
-        else:
-            print("  Using project's audio_io.read_audio for audio reading.")
+        lr_basenames = {os.path.basename(f):f for f in lr_files_all}
+        hr_basenames = {os.path.basename(f):f for f in hr_files_all}
+
+        self.file_pairs = []
+        common_basenames_sorted = sorted(list(set(lr_basenames.keys()).intersection(set(hr_basenames.keys()))))
+
+        if not common_basenames_sorted:
+            logger.warning(f"No matching audio file pairs found in {lr_dir} and {hr_dir}. Dataset will be empty.")
+            return
+
+        for basename in common_basenames_sorted:
+            self.file_pairs.append({
+                'lr': lr_basenames[basename],
+                'hr': hr_basenames[basename]
+            })
+
+        logger.info(f"Initialized PairedAudioDataset with {len(self.file_pairs)} pairs from {lr_dir} and {hr_dir}.")
+        if len(self.file_pairs) < len(lr_files_all) or len(self.file_pairs) < len(hr_files_all):
+            logger.warning("Some files did not form pairs and were excluded.")
 
 
     def __len__(self):
-        return len(self.file_paths)
+        return len(self.file_pairs)
 
     def __getitem__(self, idx):
-        file_path = self.file_paths[idx]
+        if idx >= len(self.file_pairs): # Should not happen with standard samplers
+            raise IndexError("Index out of bounds")
 
-        try:
-            # audio_data is numpy array, sr is int
-            audio_data, sr = self._read_audio_fn(file_path, target_sr=self.target_sr)
-            if audio_data is None: # Handle read error
-                print(f"Warning: Could not read {file_path}, returning zeros.")
-                # Return a dummy tensor of expected type/shape if possible, or raise error
-                # For now, return zeros, but this might cause issues downstream
-                dummy_len = self.segment_length_samples if self.segment_length_samples else self.target_sr # 1 sec dummy
-                if self.use_mel_spectrogram:
-                    return torch.zeros((self.mel_params.get('n_mels', 128), dummy_len // self.mel_params.get('hop_length', 512))), idx
-                else:
-                    return torch.zeros(dummy_len), idx
+        pair = self.file_pairs[idx]
+        lr_path = pair['lr']
+        hr_path = pair['hr']
 
+        hr_audio, hr_sr = load_audio(hr_path, target_sr=self.target_sr, mono=True)
+        lr_audio, lr_sr = load_audio(lr_path, target_sr=self.target_sr, mono=True)
 
-            # Convert to torch tensor
-            audio_tensor = torch.from_numpy(audio_data).float()
-
-            # Apply custom preprocessing if provided
-            if self.preprocessing_fn:
-                audio_tensor, sr = self.preprocessing_fn(audio_tensor, sr) # Assuming fn handles tensor or numpy
-
-            # Normalize audio (example, can be part of preprocessing_fn)
-            # Assuming normalize_audio expects numpy and returns numpy
-            # If it works with tensors, this can be simplified.
-            # For now, let's assume it's handled by preprocessing_fn or not done here.
-            # audio_data_normalized = normalize_audio(audio_data, target_db=-20.0)
-            # audio_tensor = torch.from_numpy(audio_data_normalized).float()
+        if hr_audio is None or lr_audio is None:
+            logger.warning(f"Failed to load audio for pair: LR='{lr_path}', HR='{hr_path}'. Trying a different random item.")
+            # Avoid infinite recursion if all files are bad or dataset is very small.
+            # If this happens frequently, __init__ should pre-filter valid files.
+            if len(self) > 1: # Only try random if there are other items
+                return self.__getitem__(random.choice(list(set(range(len(self))) - {idx})))
+            else: # Cannot recover if this is the only item or dataset is empty
+                # This should ideally be caught by an empty dataset check in create_dataloader
+                # Or return a specific error / dummy data that collate_fn can filter
+                logger.error(f"Cannot recover from load failure for {lr_path}, {hr_path} with dataset size {len(self)}.")
+                # Returning zero tensors as a fallback. Collate fn might need to handle this.
+                # Or raise an error to stop training if data is critical.
+                dummy_data = torch.zeros(1, self.segment_length if self.segment_length else self.target_sr)
+                return {'low_res': dummy_data, 'high_res': dummy_data, 'lr_path': lr_path, 'hr_path': hr_path, 'error': True}
 
 
-            # Random segmentation
-            if self.segment_length_samples and len(audio_tensor) > self.segment_length_samples:
-                start = torch.randint(0, len(audio_tensor) - self.segment_length_samples + 1, (1,)).item()
-                audio_tensor = audio_tensor[start : start + self.segment_length_samples]
-            elif self.segment_length_samples and len(audio_tensor) < self.segment_length_samples:
-                # Pad if shorter than segment length
-                padding = self.segment_length_samples - len(audio_tensor)
-                audio_tensor = torch.nn.functional.pad(audio_tensor, (0, padding))
-            elif self.segment_length_samples and len(audio_tensor) == self.segment_length_samples:
-                pass # Length is already correct
+        if self.segment_length:
+            min_len = min(len(hr_audio), len(lr_audio))
+            if min_len == 0: # Handle case where audio loaded but is empty
+                 logger.warning(f"Empty audio array loaded for {lr_path} or {hr_path}. Using zeros.")
+                 hr_segment = np.zeros(self.segment_length, dtype=np.float32)
+                 lr_segment = np.zeros(self.segment_length, dtype=np.float32)
+            elif min_len < self.segment_length:
+                pad_hr = self.segment_length - len(hr_audio) if len(hr_audio) < self.segment_length else 0
+                pad_lr = self.segment_length - len(lr_audio) if len(lr_audio) < self.segment_length else 0
 
-
-            if self.use_mel_spectrogram:
-                # Ensure audio_tensor is suitable for get_mel_spectrogram (e.g. numpy if librosa based)
-                # If get_mel_spectrogram is from src.preprocessing, it should handle tensor or numpy
-                # This might need adjustment based on the actual implementation of get_mel_spectrogram
-                # For this example, assuming get_mel_spectrogram takes numpy array:
-                mel_spec = get_mel_spectrogram(audio_tensor.numpy(), sr, **self.mel_params)
-                output = torch.from_numpy(mel_spec).float()
+                if pad_hr > 0: hr_audio = np.pad(hr_audio, (0, pad_hr), 'constant')
+                if pad_lr > 0: lr_audio = np.pad(lr_audio, (0, pad_lr), 'constant')
+                start_idx = 0
+                hr_segment = hr_audio
+                lr_segment = lr_audio
             else:
-                output = audio_tensor
-
-            return output, idx # Return idx to potentially fetch metadata later if needed
-
-        except Exception as e:
-            print(f"Error processing file {file_path}: {e}")
-            # Fallback: return dummy data
-            dummy_len = self.segment_length_samples if self.segment_length_samples else self.target_sr
-            if self.use_mel_spectrogram:
-                n_mels_dummy = self.mel_params.get('n_mels', 128)
-                hop_dummy = self.mel_params.get('hop_length', 512)
-                return torch.zeros((n_mels_dummy, dummy_len // hop_dummy if hop_dummy > 0 else 128)), idx
-            else:
-                return torch.zeros(dummy_len), idx
+                start_idx = random.randint(0, min_len - self.segment_length)
+                hr_segment = hr_audio[start_idx : start_idx + self.segment_length]
+                lr_segment = lr_audio[start_idx : start_idx + self.segment_length]
+        else:
+            hr_segment = hr_audio
+            lr_segment = lr_audio
+            if self.segment_length is None and hr_segment.shape[-1] != lr_segment.shape[-1]:
+                 logger.warning(f"Full files loaded but lengths differ for {lr_path} ({lr_segment.shape[-1]}) and {hr_path} ({hr_segment.shape[-1]}). Collate will need to handle this.")
 
 
-def collate_fn_pad(batch):
-    """
-    Collate function for DataLoader that pads sequences in a batch to the same length.
-    Assumes batch is a list of (tensor_data, other_info_like_idx).
-    """
-    # Separate data and other info
-    data_list = [item[0] for item in batch]
-    other_info_list = [item[1] for item in batch] # e.g., indices
+        # Placeholder for actual normalization if self.normalize is True
+        # if self.normalize:
+        #    from ..preprocessing import peak_normalize # Example
+        #    hr_segment = peak_normalize(hr_segment)
+        #    lr_segment = peak_normalize(lr_segment)
 
-    # Pad data (assuming it's the first element of the tuple)
-    # Works for both waveforms (2D: batch, time) and spectrograms (3D: batch, mels, time)
-    are_spectrograms = data_list[0].ndim == 2 # (mels, time) before batching
-    if are_spectrograms: # (batch, mels, time)
-        # padding expects (...,time, mels) so transpose, pad, then transpose back
-        # Or pad manually if features (mels) are fixed and only time varies.
-        # For simplicity, let's assume feature dim is fixed and pad time.
-        max_len = max(s.shape[1] for s in data_list)
-        padded_data = []
-        for s in data_list:
-            pad_width = (0, max_len - s.shape[1]) # Pad only the time dimension (last dim)
-            padded_s = torch.nn.functional.pad(s, pad_width, "constant", 0)
-            padded_data.append(padded_s)
-    else: # Waveforms (batch, time)
-        max_len = max(s.shape[0] for s in data_list)
-        padded_data = []
-        for s in data_list:
-            pad_width = (0, max_len - s.shape[0]) # Pad the time dimension
-            padded_s = torch.nn.functional.pad(s, pad_width, "constant", 0)
-            padded_data.append(padded_s)
+        hr_tensor = torch.from_numpy(hr_segment.copy()).float().unsqueeze(0)
+        lr_tensor = torch.from_numpy(lr_segment.copy()).float().unsqueeze(0)
 
-    # Stack padded data
-    data_tensor = torch.stack(padded_data)
-
-    # Return padded data and other info (as a tensor if appropriate, or list)
-    return data_tensor, torch.tensor(other_info_list)
+        return {'low_res': lr_tensor, 'high_res': hr_tensor, 'lr_path': lr_path, 'hr_path': hr_path}
 
 
-def create_dataloader(audio_dir, batch_size, target_sr,
-                      segment_length_samples=None,
-                      preprocessing_fn=None,
-                      use_mel_spectrogram=False, mel_params=None,
-                      num_workers=0, shuffle=True, pin_memory=True,
-                      file_extension='wav'):
-    """
-    Utility function to create a DataLoader for audio data.
-    """
-    dataset = AudioFileDataset(
-        audio_dir=audio_dir,
-        target_sr=target_sr,
-        segment_length_samples=segment_length_samples,
-        preprocessing_fn=preprocessing_fn,
-        file_extension=file_extension,
-        use_mel_spectrogram=use_mel_spectrogram,
-        mel_params=mel_params
-    )
+def create_dataloader(lr_dir: str, hr_dir: str, target_sr: int, segment_length: int,
+                      batch_size: int, num_workers: int = 0, shuffle: bool = True,
+                      pin_memory: bool = False, drop_last: bool = True, **kwargs) -> DataLoader:
+    dataset = PairedAudioDataset(lr_dir=lr_dir, hr_dir=hr_dir, target_sr=target_sr,
+                                 segment_length=segment_length, **kwargs)
 
-    # If not using fixed segment_length_samples, full audio files are loaded,
-    # and they might have variable lengths. In this case, collate_fn_pad is useful.
-    # If segment_length_samples IS used, all tensors should be the same size already.
-    current_collate_fn = collate_fn_pad if segment_length_samples is None else None
+    if len(dataset) == 0:
+        logger.error("Dataset is empty. Cannot create DataLoader.")
+        return None
 
-    dataloader = DataLoader(
-        dataset,
-        batch_size=batch_size,
-        shuffle=shuffle,
-        num_workers=num_workers,
-        pin_memory=pin_memory,
-        collate_fn=current_collate_fn
-    )
-    return dataloader
+    # Basic collate_fn: default collate should work if all tensors are same shape.
+    # If segment_length is None (full files), a custom collate_fn for padding is needed.
+    # For now, assume segment_length is always provided for consistent tensor shapes.
+    collate_function = None
+    if segment_length is None:
+        logger.warning("segment_length is None in create_dataloader. Default collate may fail if audio lengths vary.")
+        # Define or import a custom collate_fn that pads sequences to max length in batch if needed.
+        # def custom_collate(batch): ...
+        # collate_function = custom_collate
+
+    return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle,
+                      num_workers=num_workers, pin_memory=pin_memory, drop_last=drop_last,
+                      collate_fn=collate_function)
+
 
 if __name__ == '__main__':
-    print("--- Audio Dataset and DataLoader Example ---")
+    logger.info("Starting dataset.py example usage...")
 
-    # Create a dummy audio directory with a few files for testing
-    DUMMY_AUDIO_DIR = "dummy_audio_data_for_dataset_test"
-    os.makedirs(DUMMY_AUDIO_DIR, exist_ok=True)
+    dummy_root = "dummy_dataset_test_fordatasetpy" # Unique name
+    dummy_lr_dir = os.path.join(dummy_root, "lr")
+    dummy_hr_dir = os.path.join(dummy_root, "hr")
+    os.makedirs(dummy_lr_dir, exist_ok=True)
+    os.makedirs(dummy_hr_dir, exist_ok=True)
 
-    SAMPLE_RATE = 16000
-    # Create some dummy wav files using torchaudio
+    sr = 16000
+    seg_len_samples = sr * 1
+
+    # Create empty placeholder files for testing dataset logic (pairing, etc.)
+    # Actual audio loading will use the DUMMY load_audio if torch/librosa is missing.
+    file_basenames = ["sample1.wav", "sample2.wav", "sample3.flac"]
+    for basename in file_basenames:
+        open(os.path.join(dummy_lr_dir, basename), 'a').close()
+        # Create HR pairs for some, not all, to test pairing logic
+        if basename != "sample3.flac": # sample3.flac will be LR only
+            open(os.path.join(dummy_hr_dir, basename), 'a').close()
+    open(os.path.join(dummy_hr_dir, "only_hr.wav"), 'a').close() # HR only file
+
+    logger.info(f"Created dummy files in {dummy_lr_dir} and {dummy_hr_dir}")
+
     try:
-        for i in range(3):
-            dummy_waveform = torch.sin(torch.arange(0, SAMPLE_RATE * (i + 1) * 0.5) * 0.1 * (i+1)).unsqueeze(0) # Varying lengths
-            torchaudio.save(os.path.join(DUMMY_AUDIO_DIR, f"dummy_{i}.wav"), dummy_waveform, SAMPLE_RATE)
+        paired_dataset = PairedAudioDataset(lr_dir=dummy_lr_dir, hr_dir=dummy_hr_dir,
+                                            target_sr=sr, segment_length=seg_len_samples)
+        logger.info(f"Number of file pairs found: {len(paired_dataset)}")
+        # We expect "sample1.wav" and "sample2.wav" to form pairs.
+        assert len(paired_dataset) == 2, f"Expected 2 file pairs, found {len(paired_dataset)}"
 
-        # 1. Test AudioFileDataset (loading full files, variable length)
-        print("\n1. Testing AudioFileDataset (full files):")
-        full_file_dataset = AudioFileDataset(DUMMY_AUDIO_DIR, target_sr=SAMPLE_RATE)
-        if len(full_file_dataset) > 0:
-            sample_data, sample_idx = full_file_dataset[0]
-            print(f"Sample data shape (full file): {sample_data.shape}, Type: {type(sample_data)}, Index: {sample_idx}")
+        if len(paired_dataset) > 0:
+            logger.info("Attempting to get a sample item from the dataset...")
+            # This will use the DUMMY load_audio if imports failed.
+            sample_item = paired_dataset[0]
+            logger.info(f"Sample item: LR path='{sample_item['lr_path']}', HR path='{sample_item['hr_path']}'")
+            logger.info(f"  LR shape: {sample_item['low_res'].shape}, HR shape: {sample_item['high_res'].shape}")
+            assert sample_item['low_res'].shape == (1, seg_len_samples), "Low-res segment shape incorrect."
+            assert sample_item['high_res'].shape == (1, seg_len_samples), "High-res segment shape incorrect."
+
+        logger.info("\n--- Testing DataLoader ---")
+        dataloader = create_dataloader(lr_dir=dummy_lr_dir, hr_dir=dummy_hr_dir, target_sr=sr,
+                                       segment_length=seg_len_samples, batch_size=1)
+        if dataloader:
+            logger.info("DataLoader created.")
+            try:
+                for i, batch in enumerate(dataloader):
+                    logger.info(f"Batch {i+1}: LR shape={batch['low_res'].shape}, HR shape={batch['high_res'].shape}")
+                    assert batch['low_res'].ndim == 3 and batch['low_res'].shape[0] == 1
+                    assert batch['high_res'].ndim == 3 and batch['high_res'].shape[0] == 1
+                    if i >= 0: break # Check only first batch
+                logger.info("Iterating through DataLoader successful (first batch).")
+            except Exception as e_dl:
+                 logger.error(f"Error iterating DataLoader: {e_dl}. This might be due to dummy load_audio or other issues if torch is missing.")
         else:
-            print("Full file dataset is empty (dummy files might not have been created).")
+            logger.error("DataLoader creation failed.")
 
-        # 2. Test AudioFileDataset (with segmentation)
-        print("\n2. Testing AudioFileDataset (with segmentation):")
-        SEGMENT_SAMPLES = SAMPLE_RATE // 2 # 0.5 seconds
-        segmented_dataset = AudioFileDataset(DUMMY_AUDIO_DIR, target_sr=SAMPLE_RATE, segment_length_samples=SEGMENT_SAMPLES)
-        if len(segmented_dataset) > 0:
-            sample_data_seg, _ = segmented_dataset[0]
-            print(f"Sample data shape (segmented): {sample_data_seg.shape}")
-            assert sample_data_seg.shape[0] == SEGMENT_SAMPLES, "Segment length mismatch"
-        else:
-            print("Segmented dataset is empty.")
-
-        # 3. Test AudioFileDataset (with Mel Spectrogram output)
-        print("\n3. Testing AudioFileDataset (Mel Spectrogram output):")
-        mel_params_test = {'n_fft': 1024, 'hop_length': 256, 'n_mels': 64}
-        mel_dataset = AudioFileDataset(DUMMY_AUDIO_DIR, target_sr=SAMPLE_RATE,
-                                   segment_length_samples=SEGMENT_SAMPLES,
-                                   use_mel_spectrogram=True, mel_params=mel_params_test)
-        if len(mel_dataset) > 0:
-            sample_mel_spec, _ = mel_dataset[0]
-            print(f"Sample Mel spectrogram shape: {sample_mel_spec.shape}") # (n_mels, time_frames)
-            # Expected time_frames: SEGMENT_SAMPLES // hop_length + 1 (approx)
-            expected_frames = SEGMENT_SAMPLES // mel_params_test['hop_length']
-            # Librosa padding might add a frame or two
-            assert sample_mel_spec.shape[0] == mel_params_test['n_mels'], "Mel band mismatch"
-            assert abs(sample_mel_spec.shape[1] - expected_frames) <= 2 , f"Mel frames mismatch: got {sample_mel_spec.shape[1]}, expected around {expected_frames}"
-        else:
-            print("Mel dataset is empty.")
-
-
-        # 4. Test DataLoader (with padding for variable length full files)
-        print("\n4. Testing DataLoader (full files with padding):")
-        # Note: For real training, segment_length_samples is usually preferred over padding full files
-        # unless the model is designed for variable length input (e.g., with attention over all).
-        full_file_loader = create_dataloader(DUMMY_AUDIO_DIR, batch_size=2, target_sr=SAMPLE_RATE,
-                                             segment_length_samples=None, # Variable length
-                                             num_workers=0)
-        if len(full_file_loader) > 0:
-            for batch_data, batch_indices in full_file_loader:
-                print(f"Batch data shape (padded full files): {batch_data.shape}") # (batch_size, max_len_in_batch)
-                print(f"Batch indices: {batch_indices}")
-                break # Just check one batch
-        else:
-            print("Full file DataLoader is empty.")
-
-        # 5. Test DataLoader (with fixed-size segments)
-        print("\n5. Testing DataLoader (fixed-size segments):")
-        segmented_loader = create_dataloader(DUMMY_AUDIO_DIR, batch_size=2, target_sr=SAMPLE_RATE,
-                                             segment_length_samples=SEGMENT_SAMPLES, num_workers=0)
-        if len(segmented_loader) > 0:
-            for batch_data_seg, _ in segmented_loader:
-                print(f"Batch data shape (segments): {batch_data_seg.shape}") # (batch_size, SEGMENT_SAMPLES)
-                assert batch_data_seg.shape[1] == SEGMENT_SAMPLES, "Segment length mismatch in batch"
-                break
-        else:
-            print("Segmented DataLoader is empty.")
-
-        # 6. Test DataLoader (Mel Spectrograms, fixed size segments)
-        print("\n6. Testing DataLoader (Mel Spectrograms, fixed size segments):")
-        mel_loader = create_dataloader(DUMMY_AUDIO_DIR, batch_size=2, target_sr=SAMPLE_RATE,
-                                       segment_length_samples=SEGMENT_SAMPLES,
-                                       use_mel_spectrogram=True, mel_params=mel_params_test,
-                                       num_workers=0)
-        if len(mel_loader) > 0:
-            for batch_mel_spec, _ in mel_loader:
-                print(f"Batch Mel spectrogram shape: {batch_mel_spec.shape}")
-                # (batch_size, n_mels, time_frames)
-                assert batch_mel_spec.shape[1] == mel_params_test['n_mels'], "Mel band mismatch in batch"
-                assert abs(batch_mel_spec.shape[2] - expected_frames) <=2 , "Mel frames mismatch in batch"
-                break
-        else:
-            print("Mel Spectrogram DataLoader is empty.")
-
-
-    except ImportError as e:
-        print(f"Skipping some dataset tests due to missing torchaudio or other dependency: {e}")
-    except Exception as e:
-        print(f"An error occurred during dataset testing: {e}")
+    except ImportError as e_import: # Catch potential torch/librosa import errors
+        logger.error(f"ImportError in dataset example: {e_import}. This means torch or related libraries are not installed.")
+    except Exception as e_main:
+        logger.error(f"An error occurred in dataset example: {e_main}", exc_info=True)
     finally:
-        # Clean up dummy directory
-        if os.path.exists(DUMMY_AUDIO_DIR):
-            for i in range(3):
-                dummy_file = os.path.join(DUMMY_AUDIO_DIR, f"dummy_{i}.wav")
-                if os.path.exists(dummy_file):
-                    os.remove(dummy_file)
-            os.rmdir(DUMMY_AUDIO_DIR)
-        print("\nDataset and DataLoader example finished.")
+        import shutil
+        if os.path.exists(dummy_root):
+            try:
+                shutil.rmtree(dummy_root)
+                logger.info(f"Cleaned up dummy dataset directory: {dummy_root}")
+            except OSError as e_clean:
+                logger.error(f"Error removing dummy dataset directory {dummy_root}: {e_clean}")
+
+    logger.info("dataset.py example usage finished.")
