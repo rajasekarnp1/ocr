@@ -1,6 +1,6 @@
-# OCR-X Project: Development Environment Setup (Option B - On-Premise Powerhouse)
+# OCR-X Project: Development Environment Setup (Option B - Flexible Hybrid Powerhouse)
 
-This document outlines the development environment setup for the OCR-X project, specifically tailored for Option B (On-Premise Powerhouse), which emphasizes a high-performance, on-premise Windows application.
+This document outlines the development environment setup for the OCR-X project, specifically tailored for Option B: Flexible Hybrid Powerhouse. This setup supports development for an architecture that integrates robust local OCR capabilities (utilizing DirectML for acceleration) with the ability to connect to commercial cloud OCR APIs.
 
 ## 1. Local Development Environment Setup (for Windows)
 
@@ -53,17 +53,33 @@ This setup is crucial for developers working directly on the Windows client and 
         *   `trdg==1.7.0`
         *   `scikit-learn==1.3.2` (for evaluation)
         *   Testing: `pytest`, `coverage`
-        *   Linting/Formatting: `flake8`, `black` (or `ruff`)
+        *   Testing: `pytest`, `coverage`
+        *   Linting/Formatting: `ruff` (preferred), `flake8`, `black`
+        *   Cloud SDKs (as per `OCR-X_Technology_Selection_OptionB.md`):
+            *   `google-cloud-documentai==2.20.0` (or latest stable)
+            *   `google-auth==2.23.4` (or latest stable, often a dependency)
+            *   `azure-ai-vision-imageanalysis==1.0.0b1` (or latest stable for Read API)
+            *   `azure-ai-formrecognizer==3.3.2` (or latest stable, if using Document Intelligence features)
+            *   `azure-identity==1.15.0` (or latest stable)
+        *   Secure Credential Management:
+            *   `keyring` (latest stable)
 
-*   **DirectML Setup:**
+    *   **Cloud SDK Setup/Authentication (Local Development):**
+        *   Developers will need to configure authentication for Google Cloud and Azure APIs for their local testing and development against live cloud services (where necessary). This typically involves:
+            *   **Google Cloud:** Setting up Application Default Credentials (ADC) by running `gcloud auth application-default login` through the Google Cloud CLI, OR by setting the `GOOGLE_APPLICATION_CREDENTIALS` environment variable to point to a downloaded service account JSON keyfile. For development, service accounts should have minimal, role-specific permissions.
+            *   **Azure:** Logging in via Azure CLI (`az login`) for user-based authentication during development is often simplest. Alternatively, configure environment variables for a service principal (e.g., `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_CLIENT_SECRET`) or use certificate-based authentication if required by project policy.
+            *   **Important:** Actual API keys or sensitive credential files should NOT be committed to the repository. Use environment variables, local user-specific configuration files not checked into Git, or tools like `python-dotenv` to manage them locally during development. Secure credential handling for deployed application is detailed in `OCR-X_Security_Implementation.md`.
+            *   Refer to official Google Cloud and Azure documentation for detailed, up-to-date authentication instructions.
+
+*   **DirectML Setup (for Local OCR Engine Components):**
     *   **Operating System:** Windows 10 version 1709 (Fall Creators Update) or later, or Windows 11.
     *   **GPU Drivers:** Ensure GPU drivers (NVIDIA, AMD, Intel) are up-to-date and support DirectML. Refer to GPU manufacturer's websites.
-    *   **ONNX Runtime:** `onnxruntime-directml` package installation via pip is the primary method. No separate SDK is typically needed for inference with ONNX Runtime.
-    *   **TensorFlow with DirectML Plugin:** For training TensorFlow models using DirectML (if not solely relying on ONNX for inference).
+    *   **ONNX Runtime:** `onnxruntime-directml` package installation via pip is the primary method for local model inference. No separate SDK is typically needed.
+    *   **TensorFlow with DirectML Plugin:** For training TensorFlow models using DirectML (if not solely relying on ONNX for inference of local models).
         *   Follow Microsoft's official guide: `https://learn.microsoft.com/en-us/windows/ai/directml/gpu-tensorflow-plugin`
-    *   **PyTorch with DirectML:** PyTorch has been building native DirectML support.
+    *   **PyTorch with DirectML:** PyTorch has been building native DirectML support. For local model training/conversion:
         *   Follow PyTorch's official installation instructions for the version that includes DirectML support: `https://pytorch.org/get-started/locally/` (select appropriate options for Windows, DirectML).
-    *   **Verification:** Test simple models with each library to ensure DirectML is being utilized (e.g., check GPU usage in Task Manager, library-specific logging).
+    *   **Verification:** Test simple local ONNX models with `onnxruntime-directml` to ensure DirectML is being utilized (e.g., check GPU usage in Task Manager, library-specific logging).
 
 *   **WSL2 (Windows Subsystem for Linux 2 - Optional but Recommended):**
     *   **Use Cases:**
@@ -117,6 +133,7 @@ For consistent testing, component isolation during development, and potentially 
     # Or an entrypoint script for more complex startup
     ENTRYPOINT ["/app/docker-entrypoint.sh"] 
     # Example: docker-entrypoint.sh could run tests or a specific component
+    # If using mock API servers, this Dockerfile would also include their setup and dependencies.
     ```
 
 *   **Use Cases:**
@@ -124,6 +141,7 @@ For consistent testing, component isolation during development, and potentially 
     *   **Component Isolation:** Developing and testing specific backend modules (e.g., the core PaddleOCR/SVTR model wrappers before ONNX conversion, or the NLP correction logic) in isolation.
     *   **Build Environment:** Using a Docker container as a clean build environment for creating ONNX models from PyTorch/TensorFlow/PaddlePaddle, ensuring all conversion tool dependencies are met.
     *   **Synthetic Data Generation:** The TRDG pipeline can be run within a container to ensure consistent data generation across different systems.
+    *   **Testing Cloud API Client Logic without Live Calls:** A container can be configured to run mock API servers (e.g., using Python libraries like `aiohttp`, `FastAPI`, or `Flask` to simulate Google/Azure responses). This allows for isolated testing of the `CloudOCRClient` components' request formatting, response parsing, and error handling logic without incurring costs or relying on live external services, which is particularly useful for automated testing in CI. The Dockerfile might include dependencies and commands to run these mock servers.
 
 ## 3. CI/CD Pipeline Definition (e.g., using GitHub Actions)
 
@@ -144,11 +162,17 @@ Automated pipeline for building, testing, and potentially deploying OCR-X.
     5.  **Unit Tests:** Execute `pytest tests/unit` (or your chosen test runner and path). Generate coverage reports.
     6.  **Integration Tests:** Execute `pytest tests/integration`. These tests will verify interactions between major components. This stage might require more setup (e.g., dummy model files, test data).
     7.  **OCR Accuracy Benchmarking (on a small, standardized dataset):**
-        *   **Action:** Run a dedicated script that uses OCR-X's core pipeline to process a small, version-controlled benchmark dataset (e.g., 20-50 representative images).
+        *   **Action:** Run a dedicated script that uses OCR-X's core pipeline to process a small, version-controlled benchmark dataset. This should be executed for:
+            *   The local OCR engine ensemble.
+            *   The Google Cloud OCR engine integration (if CI environment is configured with credentials/mocks).
+            *   The Azure AI Vision engine integration (if CI environment is configured with credentials/mocks).
         *   **Metrics:** Use `ocreval` (for CER) and `jiwer` (for WER) to compare output against ground truth.
-        *   **Thresholding:** Optionally, configure the job to fail if CER/WER exceeds predefined thresholds (e.g., CER > 3% on this specific benchmark set for the current development stage). This helps catch accuracy regressions early.
-        *   **Reporting:** Output CER/WER to the job summary or as artifacts.
-    8.  **Build Windows Package (Manual Trigger or on Tag/Release):**
+        *   **Thresholding:** Optionally, configure the job to fail if CER/WER exceeds predefined thresholds for any of the benchmarked engine paths.
+        *   **Reporting:** Output CER/WER for each tested engine path to the job summary or as artifacts.
+    8.  **Testing Cloud API Integrations:**
+        *   Cloud API integration testing in CI will primarily rely on mocked API responses (as part of integration tests) to ensure client logic (request formatting, response parsing, error handling for known conditions) works correctly without incurring costs or external dependencies.
+        *   Occasional, carefully controlled integration tests against sandboxed or development-tier cloud provider accounts (using dedicated, restricted CI-specific API keys stored as GitHub secrets) might be run on a less frequent schedule (e.g., nightly builds on the `main` branch, or manually triggered) to catch real integration issues or undocumented API changes.
+    9.  **Build Windows Package (Manual Trigger or on Tag/Release):**
         *   Use tools like `PyInstaller` (for Python-based applications) or MSIX packaging tools if building a .NET or C++ component.
         *   Upload the built package as a workflow artifact.
     9.  **Create Release (Manual Trigger or on Tag):** Draft a new GitHub release and attach the packaged application.
@@ -181,29 +205,23 @@ Automated pipeline for building, testing, and potentially deploying OCR-X.
             with:
               python-version: ${{ matrix.python-version }}
 
-          - name: Install Poetry (or pip for requirements.txt)
+          - name: Install Dependencies
             run: |
               python -m pip install --upgrade pip
-              pip install poetry 
-              # Or: pip install -r requirements.txt
+              pip install -r requirements.txt
+            # Caching dependencies can be added here for pip
 
-          - name: Configure Poetry and Install Dependencies
+          - name: Lint with Ruff and Bandit
             run: |
-              poetry config virtualenvs.in-project true
-              poetry install --no-root --with dev 
-              # Or: pip install -r requirements.txt (if not using Poetry)
-            # Caching dependencies can be added here for pip or Poetry
-
-          - name: Lint with Ruff (replaces Flake8 and Black)
-            run: |
-              poetry run ruff check .
-              poetry run ruff format --check .
-              # Or: flake8 . && black --check .
+              pip install ruff bandit # Ensure ruff and bandit are available
+              ruff check .
+              ruff format --check .
+              bandit -r ocrx_project_root_dir_or_src_dir -ll # Adjust ocrx_project_root_dir_or_src_dir and level (e.g. -ll for medium)
 
           - name: Run Unit Tests with Pytest
             run: |
-              poetry run pytest tests/unit --cov=./ --cov-report=xml
-              # Or: pytest tests/unit --cov=./ --cov-report=xml
+              pip install pytest pytest-cov # Ensure pytest is available
+              pytest tests/unit --cov=./ --cov-report=xml
 
           # Placeholder for DirectML availability check / specific setup if needed in CI
           # This is complex in GitHub-hosted runners; might need self-hosted runners with GPUs.
@@ -213,19 +231,20 @@ Automated pipeline for building, testing, and potentially deploying OCR-X.
           #     python -c "import onnxruntime as rt; print(rt.get_available_providers())" 
           #     # This will list 'DmlExecutionProvider' if available
 
-          - name: Run Integration Tests (CPU fallback if no DirectML in CI)
+          - name: Run Integration Tests (CPU fallback if no DirectML in CI, includes mocked cloud clients)
             run: |
-              poetry run pytest tests/integration
-              # Or: pytest tests/integration
+              pytest tests/integration
 
-          - name: Run OCR Accuracy Benchmark (CPU fallback)
+          - name: Run OCR Accuracy Benchmark (CPU fallback for local models, mocked for cloud)
             env:
-                # Ensure tests run with CPU provider if DirectML is not reliably available in CI
+                # Ensure local tests run with CPU provider if DirectML is not reliably available in CI
                 ONNXRUNTIME_PREFERRED_PROVIDERS: 'CPUExecutionProvider' 
+                # Variables to enable mock mode for cloud clients during benchmark script run
+                OCR_GOOGLE_MOCK_MODE: "true"
+                OCR_AZURE_MOCK_MODE: "true"
             run: |
-              poetry run python scripts/run_benchmark.py --dataset data/benchmark_small --output results/benchmark_ci
-              poetry run python scripts/calculate_accuracy.py --pred results/benchmark_ci --gt data/benchmark_small/groundtruth.json --cer-threshold 3.0 --wer-threshold 7.0
-              # Or: python scripts/run_benchmark.py ... && python scripts/calculate_accuracy.py ...
+              python scripts/run_benchmark.py --dataset data/benchmark_small --output results/benchmark_ci --engines local,google,azure
+              python scripts/calculate_accuracy.py --pred results/benchmark_ci --gt data/benchmark_small/groundtruth.json --cer-threshold 3.0 --wer-threshold 7.0
             # Note: Actual benchmark script and accuracy calculation would need to be developed.
 
           - name: Upload Coverage Report
@@ -257,21 +276,28 @@ Automated pipeline for building, testing, and potentially deploying OCR-X.
         ```yaml
         repos:
         -   repo: https://github.com/astral-sh/ruff-pre-commit
-            rev: v0.1.9 # Use latest ruff version
+            rev: v0.1.9 # Use latest ruff version (or specific version used in project)
             hooks:
             -   id: ruff
                 args: [--fix, --exit-non-zero-on-fix]
             -   id: ruff-format
-        # -   repo: https://github.com/pre-commit/pre-commit-hooks
-        #     rev: v4.5.0
-        #     hooks:
-        #     -   id: check-yaml
-        #     -   id: end-of-file-fixer
-        #     -   id: trailing-whitespace
+        -   repo: https://github.com/PyCQA/bandit
+            rev: 1.7.6 # Use latest bandit version
+            hooks:
+            -   id: bandit
+                args: ["-r", "ocrx_project_root_dir_or_src_dir", "-ll"] # Adjust path and level
+        -   repo: https://github.com/pre-commit/pre-commit-hooks
+            rev: v4.5.0
+            hooks:
+            -   id: check-yaml
+            -   id: end-of-file-fixer
+            -   id: trailing-whitespace
         ```
-*   **Static Analysis (Optional but Recommended):**
-    *   **SonarLint:** IDE plugin for on-the-fly analysis (VS Code, PyCharm).
-    *   **Pylint:** More comprehensive static analysis, can be integrated into CI.
+*   **Static Analysis (Integrated into CI):**
+    *   **Ruff:** Already covers many static analysis checks (pyflakes, pycodestyle, etc.).
+    *   **Bandit:** For security-specific static analysis, integrated into CI and pre-commit.
+    *   **SonarLint (IDE):** Recommended for on-the-fly analysis in the IDE (VS Code, PyCharm).
+    *   **Pylint (Optional):** Can be added for more comprehensive (and often more verbose) static analysis if desired, but Ruff + Bandit cover many common needs.
 *   **Code Review Checklists:**
     *   Mandatory peer reviews for all Pull Requests to `main`.
     *   Checklist items:

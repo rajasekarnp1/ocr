@@ -1,6 +1,6 @@
 # OCR-X Project: Architecture Validation
 
-This document provides academic and industry validation for the three architectural variants proposed for the OCR-X project: Option A (Cloud-Hybrid Sophisticate), Option B (On-Premise Powerhouse), and Option C (Edge-Optimized Monolith).
+This document provides academic and industry validation for the three architectural variants proposed for the OCR-X project: Option A (Cloud-Hybrid Sophisticate), Option B (Flexible Hybrid Powerhouse), and Option C (Edge-Optimized Monolith).
 
 ## Option A: Cloud-Hybrid Sophisticate
 
@@ -62,7 +62,7 @@ This architecture offers a flexible approach, combining fully on-premise capabil
         *   **Relevance:** Commercial cloud OCR services like Google Document AI and Azure AI Vision are extensively validated through widespread industry adoption, numerous case studies, and continuous benchmarking by their providers. Their performance is generally considered state-of-the-art for many document types. The inclusion of these services as an optional processing path in Option B is validated by their proven high accuracy and advanced feature sets.
 
 *   **Relevance Justification:**
-    The PP-OCRv3 paper directly validates the choice of a key component of the proposed **local** ensemble OCR engine in Option B. The Baek et al. paper underpins common architectural choices for local OCR models. The established performance and widespread adoption of leading commercial cloud OCR services (Google Document AI, Azure AI Vision) validate their inclusion as an alternative processing path, offering users flexibility and access to potentially higher accuracy or specialized features depending on their needs and willingness to use cloud services.
+    The chosen 'Flexible Hybrid Powerhouse' architecture (Option B) is validated by combining the strengths of two well-established approaches: 1) High-performance local OCR ensembles (e.g., PP-OCR, SVTR) running efficiently on user hardware via ONNX Runtime and DirectML, validated by papers like Du et al. (PP-OCRv3) and Baek et al. (scene text model analysis relevant to SVTR). 2) Leading commercial cloud OCR services (Google Document AI, Azure AI Vision), whose SOTA accuracy is demonstrated by extensive industry use and provider benchmarks. The architectural innovation of OCR-X lies in the flexible integration of these paths via an abstraction layer, further enhanced by common advanced local pre and post-processing modules (like ByT5, validated by Vaswani et al. for NLP capabilities – see Option A). This hybrid strategy directly addresses diverse user needs for accuracy, privacy, and offline capability, a common theme identified in the `OCR-X_Competitive_Analysis.md`.
 
 ### 2. Industry & Production Implementation References
 
@@ -81,13 +81,15 @@ This architecture offers a flexible approach, combining fully on-premise capabil
 4.  **Repository/System Name & Link:** Google Cloud Document AI
     *   **Link:** `https://cloud.google.com/document-ai/docs`
     *   **Architectural Alignment:** Option B's flexible hybrid model allows for invoking Google Document AI as one of the selectable OCR engines via an abstraction layer, for users who choose cloud-based processing.
-    *   **Key Takeaways:** Provides SOTA accuracy, specialized parsers, and scalability. Cost, network dependency, and data privacy (user sends data to Google) are key considerations that Option B acknowledges by making its use optional.
+    *   **Key Takeaways:** Provides SOTA accuracy and specialized parsers (e.g., for forms, invoices), validating its inclusion as a high-quality engine choice within OCR-X's flexible architecture. OCR-X aims to leverage these capabilities on-demand, under user control (via their own API keys), and potentially enhance the results with its common local pre/post-processing pipeline, offering a unique value proposition. Cost, network dependency, and data privacy (user sends data to Google) are key considerations that Option B addresses by making its use optional and user-managed.
 5.  **Repository/System Name & Link:** Microsoft Azure AI Vision (Document Intelligence)
     *   **Link:** `https://azure.microsoft.com/en-us/products/ai-services/document-intelligence/`
     *   **Architectural Alignment:** Option B can use Azure AI Vision as another selectable cloud OCR engine, providing an alternative to Google's offering or other local engines.
-    *   **Key Takeaways:** Offers competitive accuracy and a strong feature set. Similar considerations regarding cost, network dependency, and data privacy apply, reinforcing the user-choice aspect of Option B.
+    *   **Key Takeaways:** Offers competitive accuracy and a strong feature set, including layout understanding and pre-built models, further validating its inclusion as a selectable, high-performance engine. Similar to Google's integration, OCR-X intends to use Azure services on-demand, under user control, with the potential for local pre/post-processing enhancements. The user-choice aspect of Option B, allowing bypass of cloud costs/privacy concerns by using local engines, remains key.
 
 ### 3. Quantitative Performance Analysis (Estimates)
+
+Performance of Option B varies significantly based on whether local engines or cloud APIs are utilized. Both modes are designed to be effective for their respective use cases.
 
 **Local Engine Mode:**
 *   **Latency (per standard A4 page):**
@@ -129,7 +131,7 @@ This architecture prioritizes portability and efficiency for resource-constraine
         *   **Relevance:** This paper details methods for quantizing neural networks to run with integer arithmetic, significantly reducing model size and improving inference speed on edge devices with limited computational power or specialized hardware. This is a core strategy for Option C's model optimization.
 
 *   **Relevance Justification:**
-    The MobileNets paper validates the architectural approach of using highly efficient CNN designs for the core OCR engine in resource-constrained environments. The quantization paper by Jacob et al. provides the theoretical and practical basis for the model optimization techniques (heavy quantization) that are essential to meet Option C's goals of minimal footprint and fast inference on edge devices.
+    The validation for Option C rests on established principles for efficient on-device AI. MobileNets (Howard et al.) and similar architectural paradigms validate the use of highly efficient CNN designs for lightweight OCR models. Crucially, quantization techniques (Jacob et al.) provide the theoretical and practical basis for the aggressive model optimization essential to meet Option C's goals of minimal footprint and fast inference on edge devices. Industry examples like PaddleOCR Mobile and the general success of TensorFlow Lite/PyTorch Mobile in deploying effective models on edge devices further validate this approach for scenarios demanding extreme portability and offline speed over maximal accuracy, addressing a specific niche identified in the competitive landscape (see `OCR-X_Competitive_Analysis.md`).
 
 ### 2. Industry & Production Implementation References
 
